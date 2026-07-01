@@ -1,3 +1,6 @@
+{{- if and (gt (int .Values.replicaCount) 1) (not .Values.leaderElection.enabled) }}
+{{- fail "replicaCount > 1 требует leaderElection.enabled=true, иначе реплики будут независимо удалять поды" }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -38,8 +41,6 @@ spec:
             - --metrics-bind-address=:{{ .Values.metrics.port }}
             - --health-probe-bind-address=:8081
           env:
-            - name: THRESHOLD_SECONDS
-              value: {{ .Values.config.thresholdSeconds | quote }}
             - name: DRY_RUN
               value: {{ .Values.config.dryRun | quote }}
             - name: NAMESPACES

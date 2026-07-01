@@ -4,7 +4,6 @@ import (
 	"flag"
 	"os"
 	"strings"
-	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -26,16 +25,6 @@ func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
 }
 
-// envDuration читает длительность в секундах из переменной окружения.
-func envDurationSeconds(key string, def time.Duration) time.Duration {
-	if v := os.Getenv(key); v != "" {
-		if d, err := time.ParseDuration(v + "s"); err == nil {
-			return d
-		}
-	}
-	return def
-}
-
 // envStr возвращает значение env, если оно непустое, иначе — переданный дефолт.
 func envStr(key, def string) string {
 	if v := os.Getenv(key); v != "" {
@@ -49,22 +38,19 @@ func main() {
 		metricsAddr    string
 		probeAddr      string
 		enableLeaderEl bool
-		thresholdSecs  int
 		dryRun         bool
 		namespacesFlag string
 
-		nsIncludeRegex    string
-		nsExcludeRegex    string
-		nsIncludeSelector string
-		nsExcludeSelector string
+		nsIncludeRegex     string
+		nsExcludeRegex     string
+		nsIncludeSelector  string
+		nsExcludeSelector  string
 		podExcludeSelector string
 	)
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "Адрес для /metrics.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "Адрес для health/ready проб.")
 	flag.BoolVar(&enableLeaderEl, "leader-elect", false, "Включить leader election для HA (2+ реплик).")
-	flag.IntVar(&thresholdSecs, "threshold-seconds", 120,
-		"Через сколько секунд после перехода в Terminating под удаляется. По умолчанию 120.")
 	flag.BoolVar(&dryRun, "dry-run", false, "Только логировать, ничего не удалять.")
 	flag.StringVar(&namespacesFlag, "namespaces", "",
 		"Жёсткое ограничение watch списком namespace через запятую. Пусто = весь кластер.")
@@ -83,7 +69,6 @@ func main() {
 	flag.Parse()
 
 	// Env имеет приоритет над дефолтами флагов (удобно для деплоя через манифест).
-	threshold := envDurationSeconds("THRESHOLD_SECONDS", time.Duration(thresholdSecs)*time.Second)
 	if v := os.Getenv("DRY_RUN"); v == "true" {
 		dryRun = true
 	}
@@ -133,10 +118,9 @@ func main() {
 	}
 
 	if err = (&controller.PodReaper{
-		Client:    mgr.GetClient(),
-		Threshold: threshold,
-		DryRun:    dryRun,
-		Filter:    filter,
+		Client: mgr.GetClient(),
+		DryRun: dryRun,
+		Filter: filter,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "не удалось запустить контроллер")
 		os.Exit(1)
@@ -146,7 +130,6 @@ func main() {
 	_ = mgr.AddReadyzCheck("readyz", healthz.Ping)
 
 	setupLog.Info("старт reaper'а",
-		"threshold", threshold.String(),
 		"dryRun", dryRun,
 		"namespaces", namespacesFlag,
 		"nsIncludeRegex", nsIncludeRegex,

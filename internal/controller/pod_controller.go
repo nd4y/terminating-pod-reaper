@@ -40,18 +40,25 @@ var (
 		},
 		[]string{"namespace", "reason"},
 	)
+	reapFinalizerBlocked = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "reaper_pods_finalizer_blocked_total",
+			Help: "Сколько раз обнаружен под, переживший grace-период, но удерживаемый finalizers (force-delete бессилен, нужно ручное вмешательство).",
+		},
+		[]string{"namespace"},
+	)
 )
 
 func init() {
-	metrics.Registry.MustRegister(reapedPods, reapErrors, reapSkipped)
+	metrics.Registry.MustRegister(reapedPods, reapErrors, reapSkipped, reapFinalizerBlocked)
 }
 
-// PodReaper удаляет поды, зависшие в состоянии Terminating дольше Threshold.
+// PodReaper принудительно удаляет поды, пережившие свой terminationGracePeriodSeconds
+// (т.е. застрявшие в состоянии Terminating).
 type PodReaper struct {
 	client.Client
-	Threshold time.Duration
-	DryRun    bool
-	Filter    *Filter
+	DryRun bool
+	Filter *Filter
 }
 
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;delete
@@ -93,16 +100,29 @@ func (r *PodReaper) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resul
 		}
 	}
 
-	age := time.Since(pod.DeletionTimestamp.Time)
-	if age < r.Threshold {
-		// Ещё рано — вернёмся ровно тогда, когда порог будет достигнут.
-		return ctrl.Result{RequeueAfter: r.Threshold - age}, nil
+	// deletionTimestamp = времяЗапросаУдаления + terminationGracePeriodSeconds,
+	// т.е. это дедлайн штатной graceful-остановки. Пока он не наступил — под
+	// находится в своём законном grace-периоде, трогать его небезопасно: ждём.
+	if remaining := time.Until(pod.DeletionTimestamp.Time); remaining > 0 {
+		return ctrl.Result{RequeueAfter: remaining}, nil
 	}
 
-	l = l.WithValues("pod", req.String(), "terminatingFor", age.Round(time.Second).String())
+	l = l.WithValues("pod", req.String(),
+		"terminatingSince", pod.DeletionTimestamp.Time.UTC().Format(time.RFC3339))
+
+	// Под пережил свой grace-период — kubelet должен был его убрать, но не убрал.
+	// Если под держат finalizers, force-delete (grace=0) бессилен: он снимает лишь
+	// поды с недоступной ноды, но не удаляет объект, заблокированный finalizer'ом.
+	// Такие случаи только отмечаем метрикой — авто-снятие finalizers слишком опасно.
+	if len(pod.Finalizers) > 0 {
+		reapFinalizerBlocked.WithLabelValues(pod.Namespace).Inc()
+		l.Info("под застрял в Terminating из-за finalizers; force-delete не поможет — нужно ручное снятие finalizers",
+			"finalizers", pod.Finalizers)
+		return ctrl.Result{}, nil
+	}
 
 	if r.DryRun {
-		l.Info("dry-run: под завис в Terminating, был бы удалён принудительно")
+		l.Info("dry-run: под пережил grace-период, был бы удалён принудительно")
 		return ctrl.Result{}, nil
 	}
 

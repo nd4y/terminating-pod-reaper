@@ -9,7 +9,7 @@ build: tidy      ## Локальная сборка бинаря
 	CGO_ENABLED=0 go build -o bin/reaper .
 
 run: tidy        ## Запуск локально против текущего kube-context
-	go run . --threshold-seconds=120 --dry-run=true
+	go run . --dry-run=true
 
 docker-build:    ## Собрать образ
 	docker build -t $(IMG) .

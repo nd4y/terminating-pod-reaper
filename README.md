@@ -1,11 +1,12 @@
 # terminating-pod-reaper
 
 Оператор на `controller-runtime`, который **подписывается (watch) на поды** и принудительно
-удаляет те, что зависли в состоянии `Terminating` дольше настраиваемого порога.
+удаляет те, что застряли в состоянии `Terminating` — как можно быстрее, но безопасно.
 
-В отличие от CronJob, реакция почти мгновенная: как только под переходит в `Terminating`,
-оператор ставит отложенную проверку ровно на момент `deletionTimestamp + threshold`.
-Если под к этому времени всё ещё существует — делается force-delete (`grace-period=0`).
+Отдельного настраиваемого порога нет: под удаляется ровно тогда, когда истёк его собственный
+`terminationGracePeriodSeconds` (штатная остановка уже должна была завершиться). Это значение
+API-сервер кодирует в `metadata.deletionTimestamp` (= времяЗапроса + grace). Пока дедлайн не
+наступил — под в своём законном grace-периоде, и его не трогают.
 
 ## Как это работает
 
@@ -13,16 +14,18 @@
 2. Predicate отфильтровывает всё, кроме подов с проставленным `deletionTimestamp`
    (обычный трафик апдейтов не тревожит reconcile).
 3. `Reconcile`:
-   - если `age < threshold` → `RequeueAfter: threshold - age` (ждём точно нужное время);
-   - если `age >= threshold` → force-delete с `Preconditions.UID` (защита от гонки —
-     не удалим новый под с тем же именем).
+   - если дедлайн (`deletionTimestamp`) ещё впереди → `RequeueAfter` ровно до него;
+   - иначе под пережил grace-период:
+     - если его держат **finalizers** → force-delete бессилен: только инкремент метрики
+       `reaper_pods_finalizer_blocked_total` и лог (нужно ручное вмешательство);
+     - иначе → force-delete (`grace-period=0`) с `Preconditions.UID` (защита от гонки —
+       не удалим новый под с тем же именем).
 4. Если под исчезает сам — reconcile завершается без действий.
 
 ## Конфигурация
 
 | Параметр | Флаг | Env | По умолчанию |
 |---|---|---|---|
-| Порог удаления, сек | `--threshold-seconds` | `THRESHOLD_SECONDS` | `120` |
 | Только логировать | `--dry-run` | `DRY_RUN` | `false` |
 | Жёсткое ограничение watch (список ns) | `--namespaces` | `NAMESPACES` | `""` (весь кластер) |
 | Leader election (HA) | `--leader-elect` | — | `false` |
@@ -62,8 +65,7 @@ Selector — стандартный синтаксис Kubernetes label selector
 helm install reaper oci://ghcr.io/nd4y/charts/terminating-pod-reaper \
   --version 0.1.0 \
   --namespace pod-reaper --create-namespace \
-  --set image.repository=ghcr.io/nd4y/terminating-pod-reaper \
-  --set config.thresholdSeconds=120
+  --set image.repository=ghcr.io/nd4y/terminating-pod-reaper
 
 # Или из локальной папки чарта:
 helm install reaper charts/terminating-pod-reaper \
@@ -77,7 +79,6 @@ kubectl -n pod-reaper logs deploy/reaper-terminating-pod-reaper -f
 
 | Value | По умолчанию | Назначение |
 |---|---|---|
-| `config.thresholdSeconds` | `120` | порог удаления, сек |
 | `config.dryRun` | `false` | только логировать |
 | `config.watchNamespaces` | `[]` | список namespace (пусто = весь кластер) |
 | `rbac.scope` | `cluster` | `cluster` или `namespaced` |
@@ -97,6 +98,9 @@ helm install reaper charts/terminating-pod-reaper -n pod-reaper --create-namespa
 - `reaper_pods_force_deleted_total{namespace}` — сколько подов удалено.
 - `reaper_delete_errors_total{namespace}` — ошибки force-delete.
 - `reaper_pods_skipped_total{namespace,reason}` — сколько зависших подов пропущено фильтрами.
+- `reaper_pods_finalizer_blocked_total{namespace}` — поды, пережившие grace-период, но
+  удерживаемые finalizers (force-delete бессилен, требуется ручное вмешательство) —
+  удобно вешать алерт.
 - плюс стандартные метрики controller-runtime (глубина очереди, длительность reconcile и т.д.).
 
 ## Ограничение по namespace

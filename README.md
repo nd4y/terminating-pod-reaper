@@ -55,35 +55,6 @@ Selector — стандартный синтаксис Kubernetes label selector
 --set config.filters.podExcludeSelector="reaper.io/ignore=true"
 ```
 
-## Сборка образа (GitHub Actions)
-
-Образ и Helm chart собираются автоматически (`.github/workflows/`):
-
-| Workflow | Триггер | Что делает |
-|---|---|---|
-| `ci.yaml` | push/PR в `main` | `go mod tidy` check, `go vet`, `build`, `test` |
-| `release.yaml` | push в `main` | сборка образа → `ghcr.io/<repo>:main`, `:sha-…` |
-| `release.yaml` | тег `v*` | multi-arch образ `:<version>`,`:latest` + публикация чарта в OCI |
-
-Публикация идёт в **GHCR** через встроенный `GITHUB_TOKEN` (доп. секреты не нужны).
-Релиз версии:
-
-```bash
-git tag v0.1.0 && git push origin v0.1.0
-# → ghcr.io/<owner>/<repo>:0.1.0  и  oci://ghcr.io/<owner>/charts/terminating-pod-reaper:0.1.0
-```
-
-> Если оператор лежит в подкаталоге `operator/`, перенесите `.github/workflows/*`
-> в корень репозитория и поправьте `context:`/`working-directory` (комментарии в workflow).
-
-Локальная сборка для отладки:
-
-```bash
-go mod tidy                                   # создаст go.sum
-make docker-build IMG=ghcr.io/nd4y/terminating-pod-reaper:dev
-go run . --threshold-seconds=120 --dry-run=true   # против текущего kube-context
-```
-
 ## Установка через Helm
 
 ```bash

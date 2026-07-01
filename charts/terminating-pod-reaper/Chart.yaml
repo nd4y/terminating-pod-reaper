@@ -14,3 +14,7 @@ keywords:
 maintainers:
   - name: nd4y
 home: https://github.com/nd4y/terminating-pod-reaper
+sources:
+  - https://github.com/nd4y/terminating-pod-reaper
+annotations:
+  artifacthub.io/license: MIT

@@ -1,0 +1,92 @@
+# -- Количество реплик. Для >1 включите leaderElection.enabled.
+replicaCount: 1
+
+image:
+  repository: ghcr.io/nd4y/terminating-pod-reaper
+  # -- Тег образа. Пусто → берётся .Chart.AppVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# --- Поведение оператора ---
+config:
+  # -- Порог: через сколько секунд после перехода в Terminating под удаляется.
+  thresholdSeconds: 120
+  # -- true — только логировать, ничего не удалять.
+  dryRun: false
+  # -- Жёсткое ограничение watch списком namespace (сужает кэш/нагрузку на API).
+  #    Пусто = весь кластер. Пример: ["app-prod", "app-staging"]
+  watchNamespaces: []
+
+  # --- Мягкая фильтрация (применяется в reconcile) ---
+  filters:
+    # -- Обрабатывать только namespace, чьё ИМЯ совпадает с regex. Пусто = не ограничивать.
+    namespaceIncludeRegex: ""
+    # -- Исключить namespace, чьё ИМЯ совпадает с regex.
+    namespaceExcludeRegex: ""
+    # -- Обрабатывать только namespace с МЕТКАМИ по label selector (напр. "reaper=enabled").
+    namespaceIncludeSelector: ""
+    # -- Исключить namespace с МЕТКАМИ по label selector (напр. "reaper.io/protected=true").
+    namespaceExcludeSelector: ""
+    # -- Не трогать поды с МЕТКАМИ по label selector (напр. "reaper.io/ignore=true").
+    podExcludeSelector: ""
+
+rbac:
+  # -- Создавать RBAC-ресурсы.
+  create: true
+  # -- Область прав: "cluster" (ClusterRole) или "namespaced".
+  #    "namespaced" валиден только если задан watchNamespaces — Role/RoleBinding
+  #    создаются в каждом из этих namespace.
+  scope: cluster
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# -- Leader election для HA (нужно при replicaCount > 1).
+leaderElection:
+  enabled: false
+
+metrics:
+  # -- Порт /metrics.
+  port: 8080
+  service:
+    enabled: true
+    port: 8080
+  serviceMonitor:
+    # -- Создать ServiceMonitor (требуется Prometheus Operator / CRD monitoring.coreos.com).
+    enabled: false
+    interval: 30s
+    labels: {}
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi
+
+podAnnotations: {}
+podLabels: {}
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  capabilities:
+    drop:
+      - ALL

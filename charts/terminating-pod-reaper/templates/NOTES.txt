@@ -1,0 +1,32 @@
+terminating-pod-reaper установлен.
+
+  Порог удаления:   {{ .Values.config.thresholdSeconds }} сек
+  Dry-run:          {{ .Values.config.dryRun }}
+  Область watch:    {{ if .Values.config.watchNamespaces }}{{ join ", " .Values.config.watchNamespaces }}{{ else }}весь кластер{{ end }}
+  RBAC scope:       {{ .Values.rbac.scope }}
+{{- with .Values.config.filters }}
+{{- if .namespaceIncludeRegex }}
+  ns include regex:  {{ .namespaceIncludeRegex }}
+{{- end }}
+{{- if .namespaceExcludeRegex }}
+  ns exclude regex:  {{ .namespaceExcludeRegex }}
+{{- end }}
+{{- if .namespaceIncludeSelector }}
+  ns include label:  {{ .namespaceIncludeSelector }}
+{{- end }}
+{{- if .namespaceExcludeSelector }}
+  ns exclude label:  {{ .namespaceExcludeSelector }}
+{{- end }}
+{{- if .podExcludeSelector }}
+  pod exclude label: {{ .podExcludeSelector }}
+{{- end }}
+{{- end }}
+
+Логи оператора:
+  kubectl -n {{ .Release.Namespace }} logs deploy/{{ include "reaper.fullname" . }} -f
+
+{{- if .Values.config.dryRun }}
+
+ВНИМАНИЕ: включён dry-run — поды НЕ удаляются, только логируются.
+Снимите его: --set config.dryRun=false
+{{- end }}

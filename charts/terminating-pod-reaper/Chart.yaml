@@ -1,0 +1,16 @@
+apiVersion: v2
+name: terminating-pod-reaper
+description: Оператор, удаляющий поды, зависшие в состоянии Terminating дольше заданного порога.
+type: application
+# version — версия чарта; appVersion — версия образа оператора.
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - kubernetes
+  - operator
+  - pods
+  - terminating
+  - cleanup
+maintainers:
+  - name: nd4y
+home: https://github.com/nd4y/terminating-pod-reaper

@@ -1,0 +1,32 @@
+name: e2e
+
+# Медленный e2e на kind с симуляцией отказа ноды/зоны.
+# Не гоняется на PR: только вручную и при push в main.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  kind-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install kind
+        run: |
+          curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.23.0/kind-linux-amd64
+          chmod +x ./kind && sudo mv ./kind /usr/local/bin/kind
+          kind version
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.15.2
+
+      - name: Run e2e (node failure simulation)
+        shell: bash
+        env:
+          CLUSTER: reaper-e2e
+          IMG: terminating-pod-reaper:e2e
+        run: bash test/e2e/run.sh

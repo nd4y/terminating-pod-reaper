@@ -125,6 +125,21 @@ helm install reaper charts/terminating-pod-reaper -n pod-reaper --create-namespa
 `--set rbac.scope=namespaced` выше). Если при этом задействованы фильтры по **меткам**
 namespace, чарт дополнительно выдаёт read-only `ClusterRole` только на `namespaces`.
 
+## Тестирование
+
+Три уровня, от быстрого к реалистичному:
+
+| Уровень | Что проверяет | Где | Как запустить |
+|---|---|---|---|
+| Unit | логика фильтров (namespace/label/owner) | job `ci → go` | `go test ./...` |
+| Интеграционные (envtest) | reconcile против настоящего kube-apiserver: тайминг, owner-фильтр, ветка finalizer | job `ci → envtest` | `KUBEBUILDER_ASSETS=$(setup-envtest use -p path) go test -tags=integration ./...` |
+| E2E (kind) | полный путь: «смерть» ноды → добивание пода Deployment, StatefulSet не тронут | workflow `e2e` (kind) | `bash test/e2e/run.sh` |
+
+Реальный отказ зоны в Yandex Cloud (SecurityGroup, блокирующая трафик группе нод) в CI не
+воспроизводится — это chaos-тест для staging (можно отдельным `workflow_dispatch`-пайплайном
+против живого кластера). В CI имитируется *симптом* (поды в `Terminating` с нужными owner’ами),
+а не *причина* (сетевой разрыв).
+
 ## ⚠️ Важно
 
 Force-delete убирает запись пода из etcd, но **не гарантирует** остановку контейнера на ноде

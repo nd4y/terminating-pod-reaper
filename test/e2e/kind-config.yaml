@@ -1,0 +1,6 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+  - role: worker   # цель: сюда пиним рабочую нагрузку, эту ноду «убиваем»
+  - role: worker   # сюда пиним сам оператор, чтобы он пережил падение первой ноды

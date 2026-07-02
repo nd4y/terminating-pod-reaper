@@ -30,3 +30,26 @@ jobs:
 
       - name: Test
         run: go test ./... -count=1
+
+  envtest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+
+      - name: Resolve dependencies
+        run: go mod tidy
+
+      - name: Install setup-envtest
+        run: go install sigs.k8s.io/controller-runtime/tools/setup-envtest@release-0.17
+
+      - name: Run integration tests (envtest)
+        run: |
+          export PATH="$PATH:$(go env GOPATH)/bin"
+          export KUBEBUILDER_ASSETS="$(setup-envtest use 1.29.0 -p path)"
+          echo "KUBEBUILDER_ASSETS=$KUBEBUILDER_ASSETS"
+          go test -tags=integration ./... -count=1 -run Integration -v

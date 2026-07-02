@@ -83,9 +83,8 @@ Selector — стандартный синтаксис Kubernetes label selector
 ## Установка через Helm
 
 ```bash
-# Из OCI-реестра (после релиза тега):
+# Из OCI-реестра (без --version ставится последняя опубликованная версия):
 helm install reaper oci://ghcr.io/nd4y/charts/terminating-pod-reaper \
-  --version 0.1.0 \
   --namespace pod-reaper --create-namespace \
   --set image.repository=ghcr.io/nd4y/terminating-pod-reaper
 
@@ -114,6 +113,61 @@ helm install reaper charts/terminating-pod-reaper -n pod-reaper --create-namespa
   --set rbac.scope=namespaced \
   --set '{config.watchNamespaces}={app-prod,app-staging}'
 ```
+
+### Пример values для кластерного (HA) развёртывания
+
+Для кластера с несколькими зонами (напр. 3 группы нод по зонам в Yandex Cloud): несколько
+реплик, автоматический leader election (reaping делает только лидер), разнос реплик по зонам
+и быстрый уход самого оператора с упавшей ноды.
+
+```yaml
+# values-ha.yaml
+replicaCount: 3            # >1 → leader election включается автоматически
+
+config:
+  dryRun: false            # реальное удаление (сначала обкатайте с dryRun: true)
+  # kube-system исключён по умолчанию; ownerKinds по умолчанию ReplicaSet,Job
+
+# Разносим реплики оператора по зонам доступности
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          topologyKey: topology.kubernetes.io/zone
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: terminating-pod-reaper
+
+# Чтобы под оператора сам быстро уезжал с недоступной ноды (отказ зоны)
+tolerations:
+  - key: node.kubernetes.io/unreachable
+    operator: Exists
+    effect: NoExecute
+    tolerationSeconds: 30
+  - key: node.kubernetes.io/not-ready
+    operator: Exists
+    effect: NoExecute
+    tolerationSeconds: 30
+
+resources:
+  requests: { cpu: 50m, memory: 64Mi }
+  limits:   { cpu: 200m, memory: 128Mi }
+
+metrics:
+  serviceMonitor:
+    enabled: true          # если стоит Prometheus Operator
+```
+
+```bash
+helm install reaper oci://ghcr.io/nd4y/charts/terminating-pod-reaper \
+  -n pod-reaper --create-namespace \
+  --set image.repository=ghcr.io/nd4y/terminating-pod-reaper \
+  -f values-ha.yaml
+```
+
+> Reaping в HA выполняет только текущий лидер, остальные реплики — горячий резерв.
+> При отказе зоны с лидером аренда (`lease`) перехватывается живой репликой за несколько секунд.
 
 ## Метрики (Prometheus, на `:8080/metrics`)
 

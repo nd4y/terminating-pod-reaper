@@ -17,8 +17,11 @@ docker-build:    ## Собрать образ
 docker-push:     ## Запушить образ
 	docker push $(IMG)
 
-deploy:          ## Применить манифесты (подставьте IMG в deploy/operator.yaml)
-	kubectl apply -f deploy/operator.yaml
+deploy:          ## Установить через Helm (IMG задаёт образ)
+	helm upgrade --install reaper charts/terminating-pod-reaper \
+		--namespace pod-reaper --create-namespace \
+		--set image.repository=$(firstword $(subst :, ,$(IMG))) \
+		--set image.tag=$(lastword $(subst :, ,$(IMG)))
 
-undeploy:        ## Удалить оператор
-	kubectl delete -f deploy/operator.yaml
+undeploy:        ## Удалить релиз Helm
+	helm uninstall reaper --namespace pod-reaper

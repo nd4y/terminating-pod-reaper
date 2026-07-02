@@ -147,7 +147,7 @@ func main() {
 	_ = mgr.AddHealthzCheck("healthz", healthz.Ping)
 	_ = mgr.AddReadyzCheck("readyz", healthz.Ping)
 
-	setupLog.Info("старт reaper'а",
+	setupLog.Info("старт terminating-pod-reaper",
 		"dryRun", dryRun,
 		"namespaces", namespacesFlag,
 		"nsIncludeRegex", nsIncludeRegex,

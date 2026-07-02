@@ -68,8 +68,9 @@ Selector — стандартный синтаксис Kubernetes label selector
 доп. запросов к API нет.
 
 Это ровно сценарий отказа зоны в Yandex Cloud: при недоступности нод Node Controller выселяет
-поды (ставит `deletionTimestamp`), но они виснут в `Terminating`, пока kubelet мёртв — reaper
-добивает их после grace-периода, и Deployment/Job поднимают реплики в оставшихся зонах.
+поды (ставит `deletionTimestamp`), но они виснут в `Terminating`, пока kubelet мёртв —
+terminating-pod-reaper добивает их после grace-периода, и Deployment/Job поднимают реплики
+в оставшихся зонах.
 Снять ограничение: `--set '{config.ownerKinds}={}'` (пустой список = любой владелец).
 
 Пример: чистить только ns с меткой `reaper=enabled`, кроме `kube-*`, не трогая помеченные поды:

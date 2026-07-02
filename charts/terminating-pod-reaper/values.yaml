@@ -19,6 +19,15 @@ config:
   #    безопасный режим: для реального удаления задайте dryRun: false.
   dryRun: true
 
+  # -- Максимум подов, удаляемых за один интервал опроса (syncPeriodSeconds).
+  #    Защищает API-сервер от лавины удалений при отказе целой зоны.
+  #    0 = без ограничения.
+  maxDeletionsPerInterval: 50
+
+  # -- Как часто (сек) полностью ресинкать состояние кластера — страховка от
+  #    пропущенных watch-событий; это же окно для maxDeletionsPerInterval.
+  syncPeriodSeconds: 600
+
   # -- Удалять только поды под управлением контроллера с одним из Kind.
   #    Для сценария отказа зоны/ноды: ReplicaSet (Deployment) и Job (CronJob)
   #    пересоздадут поды в живой зоне. StatefulSet/DaemonSet/«голые» — не трогаем.
@@ -62,6 +71,12 @@ serviceAccount:
 #    этот флаг позволяет включить его принудительно и при одной реплике.
 leaderElection:
   enabled: false
+
+# -- PodDisruptionBudget: создаётся при replicaCount > 1, чтобы drain нод
+#    не выносил все реплики оператора одновременно.
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
 
 metrics:
   # -- Порт /metrics.

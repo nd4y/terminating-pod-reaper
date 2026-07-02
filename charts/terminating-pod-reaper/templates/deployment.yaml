@@ -42,6 +42,10 @@ spec:
               value: {{ .Values.config.dryRun | quote }}
             - name: REAP_OWNER_KINDS
               value: {{ join "," .Values.config.ownerKinds | quote }}
+            - name: MAX_DELETIONS_PER_INTERVAL
+              value: {{ .Values.config.maxDeletionsPerInterval | quote }}
+            - name: SYNC_PERIOD_SECONDS
+              value: {{ .Values.config.syncPeriodSeconds | quote }}
             - name: NAMESPACES
               value: {{ join "," .Values.config.watchNamespaces | quote }}
             - name: NAMESPACE_INCLUDE_REGEX

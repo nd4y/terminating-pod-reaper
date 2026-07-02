@@ -1,0 +1,35 @@
+name: update-gosum
+
+# Генерирует/обновляет go.sum и коммитит его в main.
+# Запускать вручную после изменения зависимостей в go.mod.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  gosum:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+
+      - name: Generate go.sum
+        run: go mod tidy
+
+      - name: Commit go.sum
+        run: |
+          if git diff --quiet go.mod go.sum 2>/dev/null && [ -f go.sum ] && ! git status --porcelain go.sum | grep -q .; then
+            echo "go.sum не изменился — нечего коммитить"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add go.mod go.sum
+          git commit -m "chore: update go.sum"
+          git push

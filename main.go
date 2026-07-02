@@ -3,7 +3,9 @@ package main
 import (
 	"flag"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -47,6 +49,9 @@ func main() {
 		nsExcludeSelector  string
 		podExcludeSelector string
 		ownerKinds         string
+
+		maxDeletions   int
+		syncPeriodSecs int
 	)
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "Адрес для /metrics.")
@@ -69,15 +74,28 @@ func main() {
 	flag.StringVar(&ownerKinds, "reap-owner-kinds", "ReplicaSet,Job",
 		"Удалять только поды под управлением контроллера с одним из Kind (через запятую). "+
 			"Пусто = любой владелец, включая StatefulSet и «голые» поды.")
+	flag.IntVar(&maxDeletions, "max-deletions-per-interval", 50,
+		"Максимум подов, удаляемых за один интервал опроса (sync-period). 0 = без ограничения.")
+	flag.IntVar(&syncPeriodSecs, "sync-period-seconds", 600,
+		"Как часто (сек) полностью ресинкать состояние кластера — страховка от пропущенных watch-событий; "+
+			"это же окно лимита удалений. По умолчанию 600 (10 мин).")
 	opts := zap.Options{Development: false}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
+	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
 	// Env имеет приоритет над дефолтами флагов (удобно для деплоя через манифест).
-	// Для DRY_RUN и параметров с непустым дефолтом используем LookupEnv: пустое
-	// значение env значимо и должно перекрывать дефолт (чтобы Helm был авторитетен).
+	// Для параметров с непустым дефолтом используем LookupEnv: пустое значение env
+	// значимо и должно перекрывать дефолт (чтобы Helm был авторитетен).
 	if v, ok := os.LookupEnv("DRY_RUN"); ok {
-		dryRun = v == "true"
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			// Непонятное значение предохранителя → остаёмся в безопасном dry-run.
+			setupLog.Info("не удалось разобрать DRY_RUN, остаюсь в dry-run", "value", v)
+			b = true
+		}
+		dryRun = b
 	}
 	namespacesFlag = envStr("NAMESPACES", namespacesFlag)
 	nsIncludeRegex = envStr("NAMESPACE_INCLUDE_REGEX", nsIncludeRegex)
@@ -90,8 +108,27 @@ func main() {
 	if v, ok := os.LookupEnv("REAP_OWNER_KINDS"); ok {
 		ownerKinds = v
 	}
-
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+	if v, ok := os.LookupEnv("MAX_DELETIONS_PER_INTERVAL"); ok && v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 {
+			setupLog.Error(err, "некорректный MAX_DELETIONS_PER_INTERVAL", "value", v)
+			os.Exit(1)
+		}
+		maxDeletions = n
+	}
+	if v, ok := os.LookupEnv("SYNC_PERIOD_SECONDS"); ok && v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n <= 0 {
+			setupLog.Error(err, "некорректный SYNC_PERIOD_SECONDS (должен быть > 0)", "value", v)
+			os.Exit(1)
+		}
+		syncPeriodSecs = n
+	}
+	if syncPeriodSecs <= 0 {
+		setupLog.Error(nil, "sync-period-seconds должен быть > 0", "value", syncPeriodSecs)
+		os.Exit(1)
+	}
+	syncPeriod := time.Duration(syncPeriodSecs) * time.Second
 
 	if dryRun {
 		setupLog.Info("РЕЖИМ DRY-RUN включён: поды НЕ будут удаляться, только логирование. " +
@@ -110,7 +147,8 @@ func main() {
 	}
 
 	// Ограничение кэша/watch конкретными namespace, если заданы.
-	cacheOpts := cache.Options{}
+	// SyncPeriod — период полного ресинка (опроса) состояния кластера.
+	cacheOpts := cache.Options{SyncPeriod: &syncPeriod}
 	if namespacesFlag != "" {
 		nsMap := map[string]cache.Config{}
 		for _, ns := range strings.Split(namespacesFlag, ",") {
@@ -136,9 +174,11 @@ func main() {
 	}
 
 	if err = (&controller.PodReaper{
-		Client: mgr.GetClient(),
-		DryRun: dryRun,
-		Filter: filter,
+		Client:                mgr.GetClient(),
+		DryRun:                dryRun,
+		Filter:                filter,
+		MaxDeletionsPerWindow: maxDeletions,
+		Window:                syncPeriod,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "не удалось запустить контроллер")
 		os.Exit(1)
@@ -155,7 +195,9 @@ func main() {
 		"nsIncludeSelector", nsIncludeSelector,
 		"nsExcludeSelector", nsExcludeSelector,
 		"podExcludeSelector", podExcludeSelector,
-		"ownerKinds", ownerKinds)
+		"ownerKinds", ownerKinds,
+		"maxDeletionsPerInterval", maxDeletions,
+		"syncPeriod", syncPeriod.String())
 
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error(err, "manager остановился с ошибкой")

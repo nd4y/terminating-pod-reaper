@@ -1,4 +1,8 @@
-IMG ?= registry.example.com/terminating-pod-reaper:0.1.0
+# Репозиторий и тег задаются раздельно, чтобы не ломаться на реестрах
+# с портом (localhost:5000/...). IMG собирается из них.
+IMG_REPO ?= ghcr.io/nd4y/terminating-pod-reaper
+IMG_TAG  ?= dev
+IMG      ?= $(IMG_REPO):$(IMG_TAG)
 
 .PHONY: tidy build docker-build docker-push deploy undeploy run
 
@@ -17,11 +21,11 @@ docker-build:    ## Собрать образ
 docker-push:     ## Запушить образ
 	docker push $(IMG)
 
-deploy:          ## Установить через Helm (IMG задаёт образ)
+deploy:          ## Установить через Helm (IMG_REPO/IMG_TAG задают образ)
 	helm upgrade --install terminating-pod-reaper charts/terminating-pod-reaper \
 		--namespace terminating-pod-reaper --create-namespace \
-		--set image.repository=$(firstword $(subst :, ,$(IMG))) \
-		--set image.tag=$(lastword $(subst :, ,$(IMG)))
+		--set image.repository=$(IMG_REPO) \
+		--set image.tag=$(IMG_TAG)
 
 undeploy:        ## Удалить релиз Helm
 	helm uninstall terminating-pod-reaper --namespace terminating-pod-reaper

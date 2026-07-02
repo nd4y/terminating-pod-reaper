@@ -170,7 +170,7 @@ func TestIntegration_FinalizerBlocked(t *testing.T) {
 		t.Fatal("под с finalizer force-delete удалить не может — должен остаться")
 	}
 	if after <= before {
-		t.Fatal("ожидался инкремент terminating_pod_reaper_pods_finalizer_blocked_total")
+		t.Fatal("ожидался инкремент gauge terminating_pod_reaper_pods_finalizer_blocked")
 	}
 	removeFinalizers("fin-pod")
 }

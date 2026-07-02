@@ -45,11 +45,14 @@ jobs:
         run: go mod tidy
 
       - name: Install setup-envtest
-        run: go install sigs.k8s.io/controller-runtime/tools/setup-envtest@release-0.17
+        # release-0.19 использует новый индекс бинарников на GitHub
+        # (старый GCS-бакет kubebuilder-tools отдаёт 401), при этом собирается на Go 1.22.
+        run: go install sigs.k8s.io/controller-runtime/tools/setup-envtest@release-0.19
 
       - name: Run integration tests (envtest)
         run: |
           export PATH="$PATH:$(go env GOPATH)/bin"
           export KUBEBUILDER_ASSETS="$(setup-envtest use 1.29.0 -p path)"
+          test -n "$KUBEBUILDER_ASSETS" || { echo "envtest assets not resolved"; exit 1; }
           echo "KUBEBUILDER_ASSETS=$KUBEBUILDER_ASSETS"
           go test -tags=integration ./... -count=1 -run Integration -v

@@ -44,3 +44,8 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- define "reaper.imageTag" -}}
 {{- default .Chart.AppVersion .Values.image.tag -}}
 {{- end -}}
+
+{{/* Кластерный режим (leader election): явно включён ИЛИ реплик больше одной. Возвращает "true"/"false". */}}
+{{- define "reaper.leaderElect" -}}
+{{- if or .Values.leaderElection.enabled (gt (int .Values.replicaCount) 1) -}}true{{- else -}}false{{- end -}}
+{{- end -}}

@@ -15,8 +15,9 @@ fullnameOverride: ""
 # Оператор удаляет под сразу после истечения его terminationGracePeriodSeconds
 # (когда штатная остановка уже должна была завершиться). Отдельного порога нет.
 config:
-  # -- true — только логировать, ничего не удалять.
-  dryRun: false
+  # -- true — только логировать, ничего не удалять. По умолчанию включён
+  #    безопасный режим: для реального удаления задайте dryRun: false.
+  dryRun: true
 
   # -- Удалять только поды под управлением контроллера с одним из Kind.
   #    Для сценария отказа зоны/ноды: ReplicaSet (Deployment) и Job (CronJob)
@@ -34,7 +35,9 @@ config:
     # -- Обрабатывать только namespace, чьё ИМЯ совпадает с regex. Пусто = не ограничивать.
     namespaceIncludeRegex: ""
     # -- Исключить namespace, чьё ИМЯ совпадает с regex.
-    namespaceExcludeRegex: ""
+    #    По умолчанию защищён kube-system. Чтобы исключить ещё и другие ns, включите
+    #    kube-system в свой regex, напр. "^(kube-system|kube-node-lease)$".
+    namespaceExcludeRegex: "^kube-system$"
     # -- Обрабатывать только namespace с МЕТКАМИ по label selector (напр. "reaper=enabled").
     namespaceIncludeSelector: ""
     # -- Исключить namespace с МЕТКАМИ по label selector (напр. "reaper.io/protected=true").
@@ -55,7 +58,8 @@ serviceAccount:
   name: ""
   annotations: {}
 
-# -- Leader election для HA (нужно при replicaCount > 1).
+# -- Leader election для HA. Включается автоматически при replicaCount > 1;
+#    этот флаг позволяет включить его принудительно и при одной реплике.
 leaderElection:
   enabled: false
 

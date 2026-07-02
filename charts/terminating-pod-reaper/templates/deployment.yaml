@@ -1,6 +1,3 @@
-{{- if and (gt (int .Values.replicaCount) 1) (not .Values.leaderElection.enabled) }}
-{{- fail "replicaCount > 1 требует leaderElection.enabled=true, иначе реплики будут независимо удалять поды" }}
-{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -37,7 +34,7 @@ spec:
           image: "{{ .Values.image.repository }}:{{ include "reaper.imageTag" . }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args:
-            - --leader-elect={{ .Values.leaderElection.enabled }}
+            - --leader-elect={{ include "reaper.leaderElect" . }}
             - --metrics-bind-address=:{{ .Values.metrics.port }}
             - --health-probe-bind-address=:8081
           env:

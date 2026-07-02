@@ -52,13 +52,14 @@ func main() {
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "Адрес для /metrics.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "Адрес для health/ready проб.")
 	flag.BoolVar(&enableLeaderEl, "leader-elect", false, "Включить leader election для HA (2+ реплик).")
-	flag.BoolVar(&dryRun, "dry-run", false, "Только логировать, ничего не удалять.")
+	flag.BoolVar(&dryRun, "dry-run", true,
+		"Только логировать, ничего не удалять. По умолчанию true (безопасный режим).")
 	flag.StringVar(&namespacesFlag, "namespaces", "",
 		"Жёсткое ограничение watch списком namespace через запятую. Пусто = весь кластер.")
 	flag.StringVar(&nsIncludeRegex, "namespace-include-regex", "",
 		"Обрабатывать только namespace, чьё имя совпадает с regex.")
-	flag.StringVar(&nsExcludeRegex, "namespace-exclude-regex", "",
-		"Исключить namespace, чьё имя совпадает с regex.")
+	flag.StringVar(&nsExcludeRegex, "namespace-exclude-regex", "^kube-system$",
+		"Исключить namespace, чьё имя совпадает с regex. По умолчанию защищён kube-system.")
 	flag.StringVar(&nsIncludeSelector, "namespace-include-selector", "",
 		"Обрабатывать только namespace с метками, совпадающими с label selector (напр. 'reaper=enabled').")
 	flag.StringVar(&nsExcludeSelector, "namespace-exclude-selector", "",
@@ -73,22 +74,29 @@ func main() {
 	flag.Parse()
 
 	// Env имеет приоритет над дефолтами флагов (удобно для деплоя через манифест).
-	if v := os.Getenv("DRY_RUN"); v == "true" {
-		dryRun = true
+	// Для DRY_RUN и параметров с непустым дефолтом используем LookupEnv: пустое
+	// значение env значимо и должно перекрывать дефолт (чтобы Helm был авторитетен).
+	if v, ok := os.LookupEnv("DRY_RUN"); ok {
+		dryRun = v == "true"
 	}
 	namespacesFlag = envStr("NAMESPACES", namespacesFlag)
 	nsIncludeRegex = envStr("NAMESPACE_INCLUDE_REGEX", nsIncludeRegex)
-	nsExcludeRegex = envStr("NAMESPACE_EXCLUDE_REGEX", nsExcludeRegex)
+	if v, ok := os.LookupEnv("NAMESPACE_EXCLUDE_REGEX"); ok {
+		nsExcludeRegex = v
+	}
 	nsIncludeSelector = envStr("NAMESPACE_INCLUDE_SELECTOR", nsIncludeSelector)
 	nsExcludeSelector = envStr("NAMESPACE_EXCLUDE_SELECTOR", nsExcludeSelector)
 	podExcludeSelector = envStr("POD_EXCLUDE_SELECTOR", podExcludeSelector)
-	// LookupEnv, а не envStr: пустое значение env здесь значимо («любой владелец»),
-	// чтобы пустой ownerKinds в Helm отключал фильтр по владельцу.
 	if v, ok := os.LookupEnv("REAP_OWNER_KINDS"); ok {
 		ownerKinds = v
 	}
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
+	if dryRun {
+		setupLog.Info("РЕЖИМ DRY-RUN включён: поды НЕ будут удаляться, только логирование. " +
+			"Для реального удаления задайте dry-run=false (Helm: --set config.dryRun=false)")
+	}
 
 	filter, err := controller.BuildFilter(
 		nsIncludeRegex, nsExcludeRegex,

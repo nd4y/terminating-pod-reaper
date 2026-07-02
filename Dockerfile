@@ -6,12 +6,15 @@ ARG TARGETOS
 ARG TARGETARCH
 WORKDIR /src
 
+# Сначала только манифесты зависимостей — слой download кэшируется,
+# пока go.mod/go.sum не меняются. go.sum обязателен: версии зафиксированы.
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download && go mod verify
+
 COPY . .
-# Кэш-маунты BuildKit ускоряют повторные сборки (модули и build-кэш).
-# go.sum может отсутствовать в репозитории — приводим модуль в порядок здесь.
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    go mod tidy && \
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -a -ldflags="-s -w" -o /out/terminating-pod-reaper .
 

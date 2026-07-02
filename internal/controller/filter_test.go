@@ -30,12 +30,12 @@ func TestNamespaceAllowed(t *testing.T) {
 		{name: "exclude regex no match", excRe: "^kube-", ns: "app-prod", want: true},
 		{name: "exclude beats include", incRe: "prod", excRe: "^app-", ns: "app-prod", want: false},
 		{
-			name: "include selector match", incSel: "reaper=enabled",
-			ns: "app-prod", nsLabels: map[string]string{"reaper": "enabled"}, want: true,
+			name: "include selector match", incSel: "terminating-pod-reaper=enabled",
+			ns: "app-prod", nsLabels: map[string]string{"terminating-pod-reaper": "enabled"}, want: true,
 		},
 		{
-			name: "include selector no match", incSel: "reaper=enabled",
-			ns: "app-prod", nsLabels: map[string]string{"reaper": "off"}, want: false,
+			name: "include selector no match", incSel: "terminating-pod-reaper=enabled",
+			ns: "app-prod", nsLabels: map[string]string{"terminating-pod-reaper": "off"}, want: false,
 		},
 		{
 			name: "exclude selector match", excSel: "protected=true",
@@ -53,11 +53,11 @@ func TestNamespaceAllowed(t *testing.T) {
 }
 
 func TestPodAllowed(t *testing.T) {
-	f := mustFilter(t, "", "", "", "", "reaper.io/ignore=true")
+	f := mustFilter(t, "", "", "", "", "terminating-pod-reaper.io/ignore=true")
 	if !f.PodAllowed(map[string]string{"app": "web"}) {
 		t.Fatal("под без ignore-метки должен обрабатываться")
 	}
-	if f.PodAllowed(map[string]string{"reaper.io/ignore": "true"}) {
+	if f.PodAllowed(map[string]string{"terminating-pod-reaper.io/ignore": "true"}) {
 		t.Fatal("под с ignore-меткой должен быть пропущен")
 	}
 }
@@ -66,7 +66,7 @@ func TestNeedsNamespaceLabels(t *testing.T) {
 	if mustFilter(t, "^app-", "", "", "", "").NeedsNamespaceLabels() {
 		t.Fatal("regex-only фильтр не должен требовать метки namespace")
 	}
-	if !mustFilter(t, "", "", "reaper=enabled", "", "").NeedsNamespaceLabels() {
+	if !mustFilter(t, "", "", "terminating-pod-reaper=enabled", "", "").NeedsNamespaceLabels() {
 		t.Fatal("selector-фильтр должен требовать метки namespace")
 	}
 }

@@ -23,7 +23,7 @@ terminating-pod-reaper установлен.
 {{- end }}
 
 Логи оператора:
-  kubectl -n {{ .Release.Namespace }} logs deploy/{{ include "reaper.fullname" . }} -f
+  kubectl -n {{ .Release.Namespace }} logs deploy/{{ include "terminating-pod-reaper.fullname" . }} -f
 
 {{- if .Values.config.dryRun }}
 

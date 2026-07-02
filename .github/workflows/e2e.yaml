@@ -27,6 +27,6 @@ jobs:
       - name: Run e2e (node failure simulation)
         shell: bash
         env:
-          CLUSTER: reaper-e2e
+          CLUSTER: terminating-pod-reaper-e2e
           IMG: terminating-pod-reaper:e2e
         run: bash test/e2e/run.sh

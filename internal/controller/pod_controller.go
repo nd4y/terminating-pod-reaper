@@ -21,28 +21,28 @@ var (
 	// Prometheus-метрики (доступны на /metrics менеджера).
 	reapedPods = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "reaper_pods_force_deleted_total",
+			Name: "terminating_pod_reaper_pods_force_deleted_total",
 			Help: "Количество подов, принудительно удалённых из состояния Terminating.",
 		},
 		[]string{"namespace"},
 	)
 	reapErrors = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "reaper_delete_errors_total",
+			Name: "terminating_pod_reaper_delete_errors_total",
 			Help: "Количество ошибок при force-delete зависших подов.",
 		},
 		[]string{"namespace"},
 	)
 	reapSkipped = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "reaper_pods_skipped_total",
+			Name: "terminating_pod_reaper_pods_skipped_total",
 			Help: "Количество зависших подов, пропущенных из-за фильтров.",
 		},
 		[]string{"namespace", "reason"},
 	)
 	reapFinalizerBlocked = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "reaper_pods_finalizer_blocked_total",
+			Name: "terminating_pod_reaper_pods_finalizer_blocked_total",
 			Help: "Сколько раз обнаружен под, переживший grace-период, но удерживаемый finalizers (force-delete бессилен, нужно ручное вмешательство).",
 		},
 		[]string{"namespace"},

@@ -149,7 +149,7 @@ func TestIntegration_SkipsStatefulSetPod(t *testing.T) {
 		t.Fatal("под StatefulSet не должен удаляться")
 	}
 	if after <= before {
-		t.Fatal("ожидался инкремент reaper_pods_skipped_total{reason=owner_kind}")
+		t.Fatal("ожидался инкремент terminating_pod_reaper_pods_skipped_total{reason=owner_kind}")
 	}
 	removeFinalizers("ss-pod")
 }
@@ -170,7 +170,7 @@ func TestIntegration_FinalizerBlocked(t *testing.T) {
 		t.Fatal("под с finalizer force-delete удалить не может — должен остаться")
 	}
 	if after <= before {
-		t.Fatal("ожидался инкремент reaper_pods_finalizer_blocked_total")
+		t.Fatal("ожидался инкремент terminating_pod_reaper_pods_finalizer_blocked_total")
 	}
 	removeFinalizers("fin-pod")
 }

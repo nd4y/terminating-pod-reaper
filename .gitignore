@@ -1,6 +1,6 @@
 # Binaries
 bin/
-/reaper
+/terminating-pod-reaper
 *.exe
 
 # Test / coverage

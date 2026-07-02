@@ -38,11 +38,11 @@ config:
     #    По умолчанию защищён kube-system. Чтобы исключить ещё и другие ns, включите
     #    kube-system в свой regex, напр. "^(kube-system|kube-node-lease)$".
     namespaceExcludeRegex: "^kube-system$"
-    # -- Обрабатывать только namespace с МЕТКАМИ по label selector (напр. "reaper=enabled").
+    # -- Обрабатывать только namespace с МЕТКАМИ по label selector (напр. "terminating-pod-reaper=enabled").
     namespaceIncludeSelector: ""
-    # -- Исключить namespace с МЕТКАМИ по label selector (напр. "reaper.io/protected=true").
+    # -- Исключить namespace с МЕТКАМИ по label selector (напр. "terminating-pod-reaper.io/protected=true").
     namespaceExcludeSelector: ""
-    # -- Не трогать поды с МЕТКАМИ по label selector (напр. "reaper.io/ignore=true").
+    # -- Не трогать поды с МЕТКАМИ по label selector (напр. "terminating-pod-reaper.io/ignore=true").
     podExcludeSelector: ""
 
 rbac:

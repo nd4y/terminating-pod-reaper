@@ -13,11 +13,11 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     go mod tidy && \
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    go build -a -ldflags="-s -w" -o /out/reaper .
+    go build -a -ldflags="-s -w" -o /out/terminating-pod-reaper .
 
 # ---- runtime ----
 FROM gcr.io/distroless/static:nonroot
 WORKDIR /
-COPY --from=build /out/reaper /reaper
+COPY --from=build /out/terminating-pod-reaper /terminating-pod-reaper
 USER 65532:65532
-ENTRYPOINT ["/reaper"]
+ENTRYPOINT ["/terminating-pod-reaper"]

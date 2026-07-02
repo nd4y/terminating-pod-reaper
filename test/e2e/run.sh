@@ -5,7 +5,7 @@
 # Требует: kind, kubectl, helm, docker.
 set -euo pipefail
 
-CLUSTER="${CLUSTER:-reaper-e2e}"
+CLUSTER="${CLUSTER:-terminating-pod-reaper-e2e}"
 IMG="${IMG:-terminating-pod-reaper:e2e}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "${HERE}/../.." && pwd)"
@@ -24,8 +24,8 @@ docker build -t "${IMG}" "${ROOT}"
 kind load docker-image "${IMG}" --name "${CLUSTER}"
 
 echo "==> Ставим оператор (пин на ${LIVE_NODE}, dry-run=false)"
-helm install reaper "${ROOT}/charts/terminating-pod-reaper" \
-  --namespace pod-reaper --create-namespace \
+helm install terminating-pod-reaper "${ROOT}/charts/terminating-pod-reaper" \
+  --namespace terminating-pod-reaper --create-namespace \
   --set image.repository="${IMG%:*}" \
   --set image.tag="${IMG##*:}" \
   --set image.pullPolicy=IfNotPresent \
@@ -83,7 +83,7 @@ deadline=$((SECONDS + 120))
 while kubectl get pod "${DEP_POD}" >/dev/null 2>&1; do
   if (( SECONDS > deadline )); then
     echo "FAIL: под Deployment ${DEP_POD} не был удалён оператором"
-    kubectl -n pod-reaper logs deploy/reaper-terminating-pod-reaper --tail=50 || true
+    kubectl -n terminating-pod-reaper logs deploy/terminating-pod-reaper --tail=50 || true
     exit 1
   fi
   sleep 3

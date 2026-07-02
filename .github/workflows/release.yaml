@@ -87,7 +87,7 @@ jobs:
         run: helm lint charts/terminating-pod-reaper
 
       - name: Template chart (проверка рендера)
-        run: helm template test charts/terminating-pod-reaper --namespace pod-reaper > /dev/null
+        run: helm template test charts/terminating-pod-reaper --namespace terminating-pod-reaper > /dev/null
 
       # Публикация чарта только на тег v*
       - name: Log in to GHCR (OCI)

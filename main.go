@@ -61,11 +61,11 @@ func main() {
 	flag.StringVar(&nsExcludeRegex, "namespace-exclude-regex", "^kube-system$",
 		"Исключить namespace, чьё имя совпадает с regex. По умолчанию защищён kube-system.")
 	flag.StringVar(&nsIncludeSelector, "namespace-include-selector", "",
-		"Обрабатывать только namespace с метками, совпадающими с label selector (напр. 'reaper=enabled').")
+		"Обрабатывать только namespace с метками, совпадающими с label selector (напр. 'terminating-pod-reaper=enabled').")
 	flag.StringVar(&nsExcludeSelector, "namespace-exclude-selector", "",
 		"Исключить namespace с метками, совпадающими с label selector.")
 	flag.StringVar(&podExcludeSelector, "pod-exclude-selector", "",
-		"Не трогать поды с метками, совпадающими с label selector (напр. 'reaper.io/ignore=true').")
+		"Не трогать поды с метками, совпадающими с label selector (напр. 'terminating-pod-reaper.io/ignore=true').")
 	flag.StringVar(&ownerKinds, "reap-owner-kinds", "ReplicaSet,Job",
 		"Удалять только поды под управлением контроллера с одним из Kind (через запятую). "+
 			"Пусто = любой владелец, включая StatefulSet и «голые» поды.")

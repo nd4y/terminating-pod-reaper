@@ -1,10 +1,14 @@
 package controller
 
-import "testing"
+import (
+	"testing"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
 
 func mustFilter(t *testing.T, incRe, excRe, incSel, excSel, podSel string) *Filter {
 	t.Helper()
-	f, err := BuildFilter(incRe, excRe, incSel, excSel, podSel)
+	f, err := BuildFilter(incRe, excRe, incSel, excSel, podSel, "")
 	if err != nil {
 		t.Fatalf("BuildFilter: %v", err)
 	}
@@ -68,10 +72,48 @@ func TestNeedsNamespaceLabels(t *testing.T) {
 }
 
 func TestBuildFilterErrors(t *testing.T) {
-	if _, err := BuildFilter("(", "", "", "", ""); err == nil {
+	if _, err := BuildFilter("(", "", "", "", "", ""); err == nil {
 		t.Fatal("ожидалась ошибка на кривой regex")
 	}
-	if _, err := BuildFilter("", "", "!!bad", "", ""); err == nil {
+	if _, err := BuildFilter("", "", "!!bad", "", "", ""); err == nil {
 		t.Fatal("ожидалась ошибка на кривом label selector")
+	}
+}
+
+func ctrlRef(kind string) metav1.OwnerReference {
+	yes := true
+	return metav1.OwnerReference{Kind: kind, Controller: &yes}
+}
+
+func TestOwnerAllowed(t *testing.T) {
+	f, err := BuildFilter("", "", "", "", "", "ReplicaSet,Job")
+	if err != nil {
+		t.Fatalf("BuildFilter: %v", err)
+	}
+
+	tests := []struct {
+		name string
+		refs []metav1.OwnerReference
+		want bool
+	}{
+		{"ReplicaSet (Deployment)", []metav1.OwnerReference{ctrlRef("ReplicaSet")}, true},
+		{"Job (CronJob)", []metav1.OwnerReference{ctrlRef("Job")}, true},
+		{"StatefulSet", []metav1.OwnerReference{ctrlRef("StatefulSet")}, false},
+		{"DaemonSet", []metav1.OwnerReference{ctrlRef("DaemonSet")}, false},
+		{"голый под без владельца", nil, false},
+		{"owner без controller=true", []metav1.OwnerReference{{Kind: "ReplicaSet"}}, false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := f.OwnerAllowed(tc.refs); got != tc.want {
+				t.Fatalf("OwnerAllowed(%s)=%v, want %v", tc.name, got, tc.want)
+			}
+		})
+	}
+
+	// Пустой список Kind → ограничения нет.
+	all := mustFilter(t, "", "", "", "", "")
+	if !all.OwnerAllowed(nil) {
+		t.Fatal("при пустом OwnerKinds должен проходить любой под")
 	}
 }

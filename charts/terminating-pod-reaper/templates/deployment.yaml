@@ -43,6 +43,8 @@ spec:
           env:
             - name: DRY_RUN
               value: {{ .Values.config.dryRun | quote }}
+            - name: REAP_OWNER_KINDS
+              value: {{ join "," .Values.config.ownerKinds | quote }}
             - name: NAMESPACES
               value: {{ join "," .Values.config.watchNamespaces | quote }}
             - name: NAMESPACE_INCLUDE_REGEX

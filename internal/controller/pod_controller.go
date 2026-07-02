@@ -78,8 +78,14 @@ func (r *PodReaper) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resul
 		return ctrl.Result{}, nil
 	}
 
-	// Фильтрация по меткам пода / имени и меткам namespace.
+	// Фильтрация по владельцу / меткам пода / имени и меткам namespace.
 	if r.Filter != nil {
+		// Только поды под управлением разрешённого контроллера (ReplicaSet/Job и т.п.),
+		// который пересоздаст их в живой зоне. StatefulSet/DaemonSet/«голые» — не трогаем.
+		if !r.Filter.OwnerAllowed(pod.OwnerReferences) {
+			reapSkipped.WithLabelValues(pod.Namespace, "owner_kind").Inc()
+			return ctrl.Result{}, nil
+		}
 		if !r.Filter.PodAllowed(pod.Labels) {
 			reapSkipped.WithLabelValues(pod.Namespace, "pod_label").Inc()
 			return ctrl.Result{}, nil

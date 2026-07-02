@@ -3,7 +3,9 @@ package controller
 import (
 	"fmt"
 	"regexp"
+	"strings"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 )
 
@@ -18,14 +20,18 @@ import (
 //
 // Exclude имеет приоритет над Include. Пустые правила ничего не ограничивают.
 //
-// Правило подов:
-//   - если задан PodExcludeSelector и метки пода совпали → под пропускается.
+// Правила подов:
+//   - если задан PodExcludeSelector и метки пода совпали → под пропускается;
+//   - если задан OwnerKinds — под обрабатывается только если его controller-owner
+//     имеет один из перечисленных Kind (напр. ReplicaSet, Job). «Голые» поды и
+//     поды StatefulSet/DaemonSet при этом не трогаются.
 type Filter struct {
 	NsIncludeRe   *regexp.Regexp
 	NsExcludeRe   *regexp.Regexp
 	NsIncludeSel  labels.Selector
 	NsExcludeSel  labels.Selector
 	PodExcludeSel labels.Selector
+	OwnerKinds    map[string]bool
 }
 
 // NeedsNamespaceLabels — нужно ли подтягивать объект Namespace ради его меток.
@@ -60,15 +66,40 @@ func (f *Filter) PodAllowed(podLabels map[string]string) bool {
 	return true
 }
 
+// OwnerAllowed проверяет, что под управляется контроллером разрешённого Kind.
+// Пустой OwnerKinds → ограничения нет. «Голый» под (без controller-owner) при
+// заданном OwnerKinds не проходит.
+func (f *Filter) OwnerAllowed(refs []metav1.OwnerReference) bool {
+	if len(f.OwnerKinds) == 0 {
+		return true
+	}
+	for i := range refs {
+		if refs[i].Controller != nil && *refs[i].Controller {
+			return f.OwnerKinds[refs[i].Kind]
+		}
+	}
+	return false
+}
+
 // BuildFilter собирает Filter из строковых параметров (флаги/env).
 // Пустые строки означают «правило не задано».
 func BuildFilter(
 	nsIncludeRegex, nsExcludeRegex string,
 	nsIncludeSelector, nsExcludeSelector string,
 	podExcludeSelector string,
+	ownerKinds string,
 ) (*Filter, error) {
 	f := &Filter{}
 	var err error
+
+	if ownerKinds != "" {
+		f.OwnerKinds = map[string]bool{}
+		for _, k := range strings.Split(ownerKinds, ",") {
+			if k = strings.TrimSpace(k); k != "" {
+				f.OwnerKinds[k] = true
+			}
+		}
+	}
 
 	compileRe := func(name, expr string) (*regexp.Regexp, error) {
 		if expr == "" {

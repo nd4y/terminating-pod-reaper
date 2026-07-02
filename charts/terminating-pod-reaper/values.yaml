@@ -17,6 +17,14 @@ fullnameOverride: ""
 config:
   # -- true — только логировать, ничего не удалять.
   dryRun: false
+
+  # -- Удалять только поды под управлением контроллера с одним из Kind.
+  #    Для сценария отказа зоны/ноды: ReplicaSet (Deployment) и Job (CronJob)
+  #    пересоздадут поды в живой зоне. StatefulSet/DaemonSet/«голые» — не трогаем.
+  #    Пустой список = любой владелец (снимает ограничение).
+  ownerKinds:
+    - ReplicaSet
+    - Job
   # -- Жёсткое ограничение watch списком namespace (сужает кэш/нагрузку на API).
   #    Пусто = весь кластер. Пример: ["app-prod", "app-staging"]
   watchNamespaces: []

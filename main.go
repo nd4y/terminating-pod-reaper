@@ -46,6 +46,7 @@ func main() {
 		nsIncludeSelector  string
 		nsExcludeSelector  string
 		podExcludeSelector string
+		ownerKinds         string
 	)
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "Адрес для /metrics.")
@@ -64,6 +65,9 @@ func main() {
 		"Исключить namespace с метками, совпадающими с label selector.")
 	flag.StringVar(&podExcludeSelector, "pod-exclude-selector", "",
 		"Не трогать поды с метками, совпадающими с label selector (напр. 'reaper.io/ignore=true').")
+	flag.StringVar(&ownerKinds, "reap-owner-kinds", "ReplicaSet,Job",
+		"Удалять только поды под управлением контроллера с одним из Kind (через запятую). "+
+			"Пусто = любой владелец, включая StatefulSet и «голые» поды.")
 	opts := zap.Options{Development: false}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
@@ -78,6 +82,11 @@ func main() {
 	nsIncludeSelector = envStr("NAMESPACE_INCLUDE_SELECTOR", nsIncludeSelector)
 	nsExcludeSelector = envStr("NAMESPACE_EXCLUDE_SELECTOR", nsExcludeSelector)
 	podExcludeSelector = envStr("POD_EXCLUDE_SELECTOR", podExcludeSelector)
+	// LookupEnv, а не envStr: пустое значение env здесь значимо («любой владелец»),
+	// чтобы пустой ownerKinds в Helm отключал фильтр по владельцу.
+	if v, ok := os.LookupEnv("REAP_OWNER_KINDS"); ok {
+		ownerKinds = v
+	}
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
@@ -85,6 +94,7 @@ func main() {
 		nsIncludeRegex, nsExcludeRegex,
 		nsIncludeSelector, nsExcludeSelector,
 		podExcludeSelector,
+		ownerKinds,
 	)
 	if err != nil {
 		setupLog.Error(err, "неверные параметры фильтрации")
@@ -136,7 +146,8 @@ func main() {
 		"nsExcludeRegex", nsExcludeRegex,
 		"nsIncludeSelector", nsIncludeSelector,
 		"nsExcludeSelector", nsExcludeSelector,
-		"podExcludeSelector", podExcludeSelector)
+		"podExcludeSelector", podExcludeSelector,
+		"ownerKinds", ownerKinds)
 
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error(err, "manager остановился с ошибкой")

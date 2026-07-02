@@ -45,10 +45,24 @@ include-условий — они работают по И (namespace долже
 | Включить ns по label | `--namespace-include-selector` | `NAMESPACE_INCLUDE_SELECTOR` | только ns с метками по selector (напр. `reaper=enabled`) |
 | Исключить ns по label | `--namespace-exclude-selector` | `NAMESPACE_EXCLUDE_SELECTOR` | пропускать ns с метками по selector |
 | Исключить поды по label | `--pod-exclude-selector` | `POD_EXCLUDE_SELECTOR` | не трогать поды с метками по selector (напр. `reaper.io/ignore=true`) |
+| Разрешённые владельцы | `--reap-owner-kinds` | `REAP_OWNER_KINDS` | удалять только поды под управлением контроллера с таким Kind (по умолчанию `ReplicaSet,Job`) |
 
 Selector — стандартный синтаксис Kubernetes label selector (`key=value`, `key!=value`,
 `key in (a,b)`, `key`, `!key`). Фильтрация **по меткам namespace** требует чтения объектов
 `Namespace` (cluster-scoped) — чарт автоматически выдаёт read-only доступ к ним.
+
+### Фильтр по владельцу пода (отказ зоны/ноды)
+
+По умолчанию (`ReplicaSet,Job`) оператор трогает только поды, чей **controller-owner** —
+`ReplicaSet` (т.е. Deployment) или `Job` (т.е. CronJob): такие контроллеры сами пересоздадут
+под в живой зоне. Поды `StatefulSet`, `DaemonSet` и «голые» (без владельца) **пропускаются** —
+для StatefulSet force-delete опасен (split-brain). Owner берётся из `pod.ownerReferences`,
+доп. запросов к API нет.
+
+Это ровно сценарий отказа зоны в Yandex Cloud: при недоступности нод Node Controller выселяет
+поды (ставит `deletionTimestamp`), но они виснут в `Terminating`, пока kubelet мёртв — reaper
+добивает их после grace-периода, и Deployment/Job поднимают реплики в оставшихся зонах.
+Снять ограничение: `--set '{config.ownerKinds}={}'` (пустой список = любой владелец).
 
 Пример: чистить только ns с меткой `reaper=enabled`, кроме `kube-*`, не трогая помеченные поды:
 

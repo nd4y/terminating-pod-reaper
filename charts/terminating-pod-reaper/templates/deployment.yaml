@@ -40,6 +40,8 @@ spec:
           env:
             - name: DRY_RUN
               value: {{ .Values.config.dryRun | quote }}
+            - name: EXTRA_GRACE_SECONDS
+              value: {{ .Values.config.extraGraceSeconds | quote }}
             - name: REAP_OWNER_KINDS
               value: {{ join "," .Values.config.ownerKinds | quote }}
             - name: MAX_DELETIONS_PER_INTERVAL

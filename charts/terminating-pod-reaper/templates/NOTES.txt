@@ -1,6 +1,6 @@
 terminating-pod-reaper установлен.
 
-  Триггер:          удаление сразу после истечения terminationGracePeriodSeconds пода
+  Триггер:          удаление после terminationGracePeriodSeconds + {{ .Values.config.extraGraceSeconds }}с буфера
   Dry-run:          {{ .Values.config.dryRun }}
   Область watch:    {{ if .Values.config.watchNamespaces }}{{ join ", " .Values.config.watchNamespaces }}{{ else }}весь кластер{{ end }}
   RBAC scope:       {{ .Values.rbac.scope }}

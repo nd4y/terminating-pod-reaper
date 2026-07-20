@@ -62,6 +62,23 @@ type PodReaper struct {
 	DryRun bool
 	Filter *Filter
 
+	// ExtraGrace — дополнительный буфер сверх terminationGracePeriodSeconds
+	// пода (т.е. сверх deletionTimestamp), прежде чем считать под застрявшим.
+	//
+	// deletionTimestamp — это дедлайн ШТАТНОГО завершения, а не гарантия, что
+	// kubelet уже освободил ресурсы ноды к этому моменту: контейнер runtime,
+	// sidecar (классика — Istio proxy, не всегда мгновенно реагирующий на
+	// SIGTERM) или загруженный узел могут закончить на секунды-десятки секунд
+	// позже номинального дедлайна — это нормально, не «завис». Без буфера
+	// force-delete в T+0 систематически гонится с законным (чуть более
+	// медленным) завершением kubelet и побеждает: пода умирает вроде бы вовремя,
+	// но объект в API исчезает до того, как kubelet реально прибил контейнеры,
+	// что может ненадолго осиротить ресурсы на ноде. Буфер даёт kubelet
+	// честный шанс закончить самому; вмешивается оператор только если под
+	// пережил ещё и этот запас — то есть действительно застрял (мёртвая нода,
+	// зависший finalizer), а не просто чуть медленнее обычного.
+	ExtraGrace time.Duration
+
 	// MaxDeletionsPerWindow ограничивает число force-delete за окно Window.
 	// 0 или меньше — без ограничения.
 	MaxDeletionsPerWindow int
@@ -170,16 +187,18 @@ func (r *PodReaper) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resul
 	}
 
 	// deletionTimestamp = времяЗапросаУдаления + terminationGracePeriodSeconds,
-	// т.е. это дедлайн штатной graceful-остановки. Пока он не наступил — под
-	// находится в своём законном grace-периоде, трогать его небезопасно: ждём.
-	if remaining := time.Until(pod.DeletionTimestamp.Time); remaining > 0 {
+	// т.е. дедлайн штатной graceful-остановки. Действуем не раньше deadline +
+	// ExtraGrace — см. комментарий у поля ExtraGrace про гонку с kubelet.
+	deadline := pod.DeletionTimestamp.Time.Add(r.ExtraGrace)
+	if remaining := time.Until(deadline); remaining > 0 {
 		return ctrl.Result{RequeueAfter: remaining}, nil
 	}
 
 	l = l.WithValues("pod", req.String(),
-		"terminatingSince", pod.DeletionTimestamp.Time.UTC().Format(time.RFC3339))
+		"terminatingSince", pod.DeletionTimestamp.Time.UTC().Format(time.RFC3339),
+		"extraGrace", r.ExtraGrace.String())
 
-	// Под пережил свой grace-период — kubelet должен был его убрать, но не убрал.
+	// Под пережил свой grace-период (плюс буфер) — kubelet должен был его убрать, но не убрал.
 	// Если под держат finalizers, force-delete (grace=0) бессилен: он снимает лишь
 	// поды с недоступной ноды, но не удаляет объект, заблокированный finalizer'ом.
 	// Такие случаи только отмечаем gauge-метрикой — авто-снятие finalizers опасно.

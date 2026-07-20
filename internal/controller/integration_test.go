@@ -132,6 +132,38 @@ func TestIntegration_ForceDeletesExpiredReplicaSetPod(t *testing.T) {
 	}
 }
 
+// Под пережил terminationGracePeriodSeconds, но ExtraGrace ещё не истёк —
+// это тот самый случай гонки с kubelet/sidecar (см. пояснение у поля ExtraGrace):
+// оператор должен ждать, а не удалять немедленно.
+func TestIntegration_WaitsForExtraGrace(t *testing.T) {
+	p := makePod(t, "extragrace-pod", "ReplicaSet", false)
+	grace := int64(1)
+	if err := k8sClient.Delete(context.Background(), p, &client.DeleteOptions{GracePeriodSeconds: &grace}); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	if !exists(t, "extragrace-pod") {
+		t.Skip("envtest удалил под до дедлайна — пропускаем")
+	}
+	time.Sleep(1500 * time.Millisecond) // штатный grace истёк
+
+	f, _ := BuildFilter("", "", "", "", "", "ReplicaSet,Job")
+	r := &PodReaper{Client: k8sClient, Filter: f, ExtraGrace: 5 * time.Second}
+
+	// Штатный grace уже прошёл, но ExtraGrace (5с) — ещё нет: ждём, не удаляем.
+	if ra := reconcile(t, r, "extragrace-pod"); ra <= 0 {
+		t.Fatalf("ожидался RequeueAfter > 0 в пределах ExtraGrace, got %v", ra)
+	}
+	if !exists(t, "extragrace-pod") {
+		t.Fatal("под не должен быть удалён до истечения ExtraGrace")
+	}
+
+	time.Sleep(5 * time.Second) // ExtraGrace истёк
+	reconcile(t, r, "extragrace-pod")
+	if exists(t, "extragrace-pod") {
+		t.Fatal("под должен быть удалён после истечения grace + ExtraGrace")
+	}
+}
+
 func TestIntegration_SkipsStatefulSetPod(t *testing.T) {
 	p := makePod(t, "ss-pod", "StatefulSet", false)
 	grace := int64(1)

@@ -52,6 +52,7 @@ func main() {
 
 		maxDeletions   int
 		syncPeriodSecs int
+		extraGraceSecs int
 	)
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "Адрес для /metrics.")
@@ -79,6 +80,11 @@ func main() {
 	flag.IntVar(&syncPeriodSecs, "sync-period-seconds", 600,
 		"Как часто (сек) полностью ресинкать состояние кластера — страховка от пропущенных watch-событий; "+
 			"это же окно лимита удалений. По умолчанию 600 (10 мин).")
+	flag.IntVar(&extraGraceSecs, "extra-grace-seconds", 60,
+		"Дополнительный буфер (сек) сверх terminationGracePeriodSeconds пода перед force-delete. "+
+			"Даёт kubelet честный шанс завершить под самому (в т.ч. sidecar-контейнеры вроде Istio proxy, "+
+			"которым нужно чуть больше номинального grace) — без буфера оператор систематически "+
+			"опережает штатное завершение. По умолчанию 60.")
 	opts := zap.Options{Development: false}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
@@ -124,11 +130,24 @@ func main() {
 		}
 		syncPeriodSecs = n
 	}
+	if v, ok := os.LookupEnv("EXTRA_GRACE_SECONDS"); ok && v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 {
+			setupLog.Error(err, "некорректный EXTRA_GRACE_SECONDS (должен быть >= 0)", "value", v)
+			os.Exit(1)
+		}
+		extraGraceSecs = n
+	}
 	if syncPeriodSecs <= 0 {
 		setupLog.Error(nil, "sync-period-seconds должен быть > 0", "value", syncPeriodSecs)
 		os.Exit(1)
 	}
+	if extraGraceSecs < 0 {
+		setupLog.Error(nil, "extra-grace-seconds должен быть >= 0", "value", extraGraceSecs)
+		os.Exit(1)
+	}
 	syncPeriod := time.Duration(syncPeriodSecs) * time.Second
+	extraGrace := time.Duration(extraGraceSecs) * time.Second
 
 	if dryRun {
 		setupLog.Info("РЕЖИМ DRY-RUN включён: поды НЕ будут удаляться, только логирование. " +
@@ -177,6 +196,7 @@ func main() {
 		Client:                mgr.GetClient(),
 		DryRun:                dryRun,
 		Filter:                filter,
+		ExtraGrace:            extraGrace,
 		MaxDeletionsPerWindow: maxDeletions,
 		Window:                syncPeriod,
 	}).SetupWithManager(mgr); err != nil {
@@ -197,7 +217,8 @@ func main() {
 		"podExcludeSelector", podExcludeSelector,
 		"ownerKinds", ownerKinds,
 		"maxDeletionsPerInterval", maxDeletions,
-		"syncPeriod", syncPeriod.String())
+		"syncPeriod", syncPeriod.String(),
+		"extraGrace", extraGrace.String())
 
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error(err, "manager остановился с ошибкой")

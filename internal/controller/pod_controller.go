@@ -82,7 +82,9 @@ type PodReaper struct {
 	// MaxDeletionsPerWindow caps the number of force-deletes per Window.
 	// 0 or less means no limit.
 	MaxDeletionsPerWindow int
-	// Window is the rate limiter's window size (usually equal to the cache resync period).
+	// Window is the rate limiter's window size. Independent of the manager's cache
+	// resync period — a short Window lets a large backlog (e.g. after a zone
+	// failure) drain quickly without having to also resync the cache more often.
 	Window time.Duration
 
 	mu              sync.Mutex

@@ -50,9 +50,10 @@ func main() {
 		podExcludeSelector string
 		ownerKinds         string
 
-		maxDeletions   int
-		syncPeriodSecs int
-		extraGraceSecs int
+		maxDeletions        int
+		syncPeriodSecs      int
+		extraGraceSecs      int
+		rateLimitWindowSecs int
 	)
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "Address for /metrics.")
@@ -75,11 +76,15 @@ func main() {
 	flag.StringVar(&ownerKinds, "reap-owner-kinds", "ReplicaSet,Job",
 		"Only delete pods managed by a controller with one of these Kinds (comma-separated). "+
 			"Empty means any owner, including StatefulSet and bare pods.")
-	flag.IntVar(&maxDeletions, "max-deletions-per-interval", 50,
-		"Maximum number of pods deleted per polling interval (sync-period). 0 means no limit.")
+	flag.IntVar(&maxDeletions, "max-deletions-per-interval", 200,
+		"Maximum number of pods deleted per rate-limit-window-seconds window. 0 means no limit.")
 	flag.IntVar(&syncPeriodSecs, "sync-period-seconds", 600,
 		"How often (seconds) to fully resync cluster state — a safety net against missed watch "+
-			"events; also the window for the deletion rate limit. Defaults to 600 (10 min).")
+			"events. Independent of the deletion rate limit. Defaults to 600 (10 min).")
+	flag.IntVar(&rateLimitWindowSecs, "rate-limit-window-seconds", 30,
+		"Window (seconds) for the deletion rate limit (max-deletions-per-interval). Independent of "+
+			"sync-period-seconds — a short window lets the operator clear a large backlog quickly "+
+			"(e.g. after a zone failure) while the cache resync stays infrequent. Defaults to 30.")
 	flag.IntVar(&extraGraceSecs, "extra-grace-seconds", 60,
 		"Extra buffer (seconds) on top of a pod's terminationGracePeriodSeconds before force-delete. "+
 			"Gives kubelet a fair chance to finish the pod itself (including sidecar containers like the "+
@@ -138,6 +143,14 @@ func main() {
 		}
 		extraGraceSecs = n
 	}
+	if v, ok := os.LookupEnv("RATE_LIMIT_WINDOW_SECONDS"); ok && v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n <= 0 {
+			setupLog.Error(err, "invalid RATE_LIMIT_WINDOW_SECONDS (must be > 0)", "value", v)
+			os.Exit(1)
+		}
+		rateLimitWindowSecs = n
+	}
 	if syncPeriodSecs <= 0 {
 		setupLog.Error(nil, "sync-period-seconds must be > 0", "value", syncPeriodSecs)
 		os.Exit(1)
@@ -146,8 +159,13 @@ func main() {
 		setupLog.Error(nil, "extra-grace-seconds must be >= 0", "value", extraGraceSecs)
 		os.Exit(1)
 	}
+	if rateLimitWindowSecs <= 0 {
+		setupLog.Error(nil, "rate-limit-window-seconds must be > 0", "value", rateLimitWindowSecs)
+		os.Exit(1)
+	}
 	syncPeriod := time.Duration(syncPeriodSecs) * time.Second
 	extraGrace := time.Duration(extraGraceSecs) * time.Second
+	rateLimitWindow := time.Duration(rateLimitWindowSecs) * time.Second
 
 	if dryRun {
 		setupLog.Info("DRY-RUN MODE enabled: pods will NOT be deleted, logging only. " +
@@ -198,7 +216,7 @@ func main() {
 		Filter:                filter,
 		ExtraGrace:            extraGrace,
 		MaxDeletionsPerWindow: maxDeletions,
-		Window:                syncPeriod,
+		Window:                rateLimitWindow,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to start controller")
 		os.Exit(1)
@@ -217,6 +235,7 @@ func main() {
 		"podExcludeSelector", podExcludeSelector,
 		"ownerKinds", ownerKinds,
 		"maxDeletionsPerInterval", maxDeletions,
+		"rateLimitWindow", rateLimitWindow.String(),
 		"syncPeriod", syncPeriod.String(),
 		"extraGrace", extraGrace.String())
 

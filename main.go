@@ -27,7 +27,7 @@ func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
 }
 
-// envStr возвращает значение env, если оно непустое, иначе — переданный дефолт.
+// envStr returns the env value if non-empty, otherwise the given default.
 func envStr(key, def string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
@@ -55,50 +55,50 @@ func main() {
 		extraGraceSecs int
 	)
 
-	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "Адрес для /metrics.")
-	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "Адрес для health/ready проб.")
-	flag.BoolVar(&enableLeaderEl, "leader-elect", false, "Включить leader election для HA (2+ реплик).")
+	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "Address for /metrics.")
+	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "Address for health/readiness probes.")
+	flag.BoolVar(&enableLeaderEl, "leader-elect", false, "Enable leader election for HA (2+ replicas).")
 	flag.BoolVar(&dryRun, "dry-run", true,
-		"Только логировать, ничего не удалять. По умолчанию true (безопасный режим).")
+		"Only log, never delete. Defaults to true (safe mode).")
 	flag.StringVar(&namespacesFlag, "namespaces", "",
-		"Жёсткое ограничение watch списком namespace через запятую. Пусто = весь кластер.")
+		"Hard-restrict the watch to this comma-separated list of namespaces. Empty means the whole cluster.")
 	flag.StringVar(&nsIncludeRegex, "namespace-include-regex", "",
-		"Обрабатывать только namespace, чьё имя совпадает с regex.")
+		"Only process namespaces whose name matches this regex.")
 	flag.StringVar(&nsExcludeRegex, "namespace-exclude-regex", "^kube-system$",
-		"Исключить namespace, чьё имя совпадает с regex. По умолчанию защищён kube-system.")
+		"Exclude namespaces whose name matches this regex. kube-system is protected by default.")
 	flag.StringVar(&nsIncludeSelector, "namespace-include-selector", "",
-		"Обрабатывать только namespace с метками, совпадающими с label selector (напр. 'terminating-pod-reaper=enabled').")
+		"Only process namespaces whose labels match this label selector (e.g. 'terminating-pod-reaper=enabled').")
 	flag.StringVar(&nsExcludeSelector, "namespace-exclude-selector", "",
-		"Исключить namespace с метками, совпадающими с label selector.")
+		"Exclude namespaces whose labels match this label selector.")
 	flag.StringVar(&podExcludeSelector, "pod-exclude-selector", "",
-		"Не трогать поды с метками, совпадающими с label selector (напр. 'terminating-pod-reaper.io/ignore=true').")
+		"Skip pods whose labels match this label selector (e.g. 'terminating-pod-reaper.io/ignore=true').")
 	flag.StringVar(&ownerKinds, "reap-owner-kinds", "ReplicaSet,Job",
-		"Удалять только поды под управлением контроллера с одним из Kind (через запятую). "+
-			"Пусто = любой владелец, включая StatefulSet и «голые» поды.")
+		"Only delete pods managed by a controller with one of these Kinds (comma-separated). "+
+			"Empty means any owner, including StatefulSet and bare pods.")
 	flag.IntVar(&maxDeletions, "max-deletions-per-interval", 50,
-		"Максимум подов, удаляемых за один интервал опроса (sync-period). 0 = без ограничения.")
+		"Maximum number of pods deleted per polling interval (sync-period). 0 means no limit.")
 	flag.IntVar(&syncPeriodSecs, "sync-period-seconds", 600,
-		"Как часто (сек) полностью ресинкать состояние кластера — страховка от пропущенных watch-событий; "+
-			"это же окно лимита удалений. По умолчанию 600 (10 мин).")
+		"How often (seconds) to fully resync cluster state — a safety net against missed watch "+
+			"events; also the window for the deletion rate limit. Defaults to 600 (10 min).")
 	flag.IntVar(&extraGraceSecs, "extra-grace-seconds", 60,
-		"Дополнительный буфер (сек) сверх terminationGracePeriodSeconds пода перед force-delete. "+
-			"Даёт kubelet честный шанс завершить под самому (в т.ч. sidecar-контейнеры вроде Istio proxy, "+
-			"которым нужно чуть больше номинального grace) — без буфера оператор систематически "+
-			"опережает штатное завершение. По умолчанию 60.")
+		"Extra buffer (seconds) on top of a pod's terminationGracePeriodSeconds before force-delete. "+
+			"Gives kubelet a fair chance to finish the pod itself (including sidecar containers like the "+
+			"Istio proxy, which can need a bit more than the nominal grace period) — without this buffer "+
+			"the operator systematically races the normal shutdown. Defaults to 60.")
 	opts := zap.Options{Development: false}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
-	// Env имеет приоритет над дефолтами флагов (удобно для деплоя через манифест).
-	// Для параметров с непустым дефолтом используем LookupEnv: пустое значение env
-	// значимо и должно перекрывать дефолт (чтобы Helm был авторитетен).
+	// Env takes priority over flag defaults (convenient for manifest-based deploys).
+	// For parameters with a non-empty default we use LookupEnv: an empty env value
+	// is meaningful and should override the default (so Helm stays authoritative).
 	if v, ok := os.LookupEnv("DRY_RUN"); ok {
 		b, err := strconv.ParseBool(v)
 		if err != nil {
-			// Непонятное значение предохранителя → остаёмся в безопасном dry-run.
-			setupLog.Info("не удалось разобрать DRY_RUN, остаюсь в dry-run", "value", v)
+			// Unparseable value for the safety switch -> stay in dry-run.
+			setupLog.Info("could not parse DRY_RUN, staying in dry-run", "value", v)
 			b = true
 		}
 		dryRun = b
@@ -117,7 +117,7 @@ func main() {
 	if v, ok := os.LookupEnv("MAX_DELETIONS_PER_INTERVAL"); ok && v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil || n < 0 {
-			setupLog.Error(err, "некорректный MAX_DELETIONS_PER_INTERVAL", "value", v)
+			setupLog.Error(err, "invalid MAX_DELETIONS_PER_INTERVAL", "value", v)
 			os.Exit(1)
 		}
 		maxDeletions = n
@@ -125,7 +125,7 @@ func main() {
 	if v, ok := os.LookupEnv("SYNC_PERIOD_SECONDS"); ok && v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil || n <= 0 {
-			setupLog.Error(err, "некорректный SYNC_PERIOD_SECONDS (должен быть > 0)", "value", v)
+			setupLog.Error(err, "invalid SYNC_PERIOD_SECONDS (must be > 0)", "value", v)
 			os.Exit(1)
 		}
 		syncPeriodSecs = n
@@ -133,25 +133,25 @@ func main() {
 	if v, ok := os.LookupEnv("EXTRA_GRACE_SECONDS"); ok && v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil || n < 0 {
-			setupLog.Error(err, "некорректный EXTRA_GRACE_SECONDS (должен быть >= 0)", "value", v)
+			setupLog.Error(err, "invalid EXTRA_GRACE_SECONDS (must be >= 0)", "value", v)
 			os.Exit(1)
 		}
 		extraGraceSecs = n
 	}
 	if syncPeriodSecs <= 0 {
-		setupLog.Error(nil, "sync-period-seconds должен быть > 0", "value", syncPeriodSecs)
+		setupLog.Error(nil, "sync-period-seconds must be > 0", "value", syncPeriodSecs)
 		os.Exit(1)
 	}
 	if extraGraceSecs < 0 {
-		setupLog.Error(nil, "extra-grace-seconds должен быть >= 0", "value", extraGraceSecs)
+		setupLog.Error(nil, "extra-grace-seconds must be >= 0", "value", extraGraceSecs)
 		os.Exit(1)
 	}
 	syncPeriod := time.Duration(syncPeriodSecs) * time.Second
 	extraGrace := time.Duration(extraGraceSecs) * time.Second
 
 	if dryRun {
-		setupLog.Info("РЕЖИМ DRY-RUN включён: поды НЕ будут удаляться, только логирование. " +
-			"Для реального удаления задайте dry-run=false (Helm: --set config.dryRun=false)")
+		setupLog.Info("DRY-RUN MODE enabled: pods will NOT be deleted, logging only. " +
+			"For real deletion set dry-run=false (Helm: --set config.dryRun=false)")
 	}
 
 	filter, err := controller.BuildFilter(
@@ -161,12 +161,12 @@ func main() {
 		ownerKinds,
 	)
 	if err != nil {
-		setupLog.Error(err, "неверные параметры фильтрации")
+		setupLog.Error(err, "invalid filter parameters")
 		os.Exit(1)
 	}
 
-	// Ограничение кэша/watch конкретными namespace, если заданы.
-	// SyncPeriod — период полного ресинка (опроса) состояния кластера.
+	// Restrict the cache/watch to specific namespaces, if set.
+	// SyncPeriod is the full resync (poll) period for cluster state.
 	cacheOpts := cache.Options{SyncPeriod: &syncPeriod}
 	if namespacesFlag != "" {
 		nsMap := map[string]cache.Config{}
@@ -188,7 +188,7 @@ func main() {
 		LeaderElectionID:       "terminating-pod-reaper.nd4y.io",
 	})
 	if err != nil {
-		setupLog.Error(err, "не удалось создать manager")
+		setupLog.Error(err, "unable to create manager")
 		os.Exit(1)
 	}
 
@@ -200,14 +200,14 @@ func main() {
 		MaxDeletionsPerWindow: maxDeletions,
 		Window:                syncPeriod,
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "не удалось запустить контроллер")
+		setupLog.Error(err, "unable to start controller")
 		os.Exit(1)
 	}
 
 	_ = mgr.AddHealthzCheck("healthz", healthz.Ping)
 	_ = mgr.AddReadyzCheck("readyz", healthz.Ping)
 
-	setupLog.Info("старт terminating-pod-reaper",
+	setupLog.Info("starting terminating-pod-reaper",
 		"dryRun", dryRun,
 		"namespaces", namespacesFlag,
 		"nsIncludeRegex", nsIncludeRegex,
@@ -221,7 +221,7 @@ func main() {
 		"extraGrace", extraGrace.String())
 
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		setupLog.Error(err, "manager остановился с ошибкой")
+		setupLog.Error(err, "manager exited with an error")
 		os.Exit(1)
 	}
 }

@@ -3,8 +3,8 @@ name: terminating-pod-reaper
 description: Оператор, удаляющий поды, зависшие в состоянии Terminating дольше заданного порога.
 type: application
 # version — версия чарта; appVersion — версия образа оператора.
-version: 0.2.1
-appVersion: "0.2.1"
+version: 0.2.2
+appVersion: "0.2.2"
 keywords:
   - kubernetes
   - operator

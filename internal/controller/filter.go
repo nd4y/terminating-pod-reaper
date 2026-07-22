@@ -9,22 +9,22 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 )
 
-// Filter решает, подлежит ли под в данном namespace обработке (reaping).
+// Filter decides whether a pod in a given namespace is subject to reaping.
 //
-// Правила namespace:
-//   - если задан ExcludeRegex и имя совпало     → исключить;
-//   - если задан ExcludeSelector и метки ns совпали → исключить;
-//   - если задан IncludeRegex и имя НЕ совпало   → исключить;
-//   - если задан IncludeSelector и метки ns НЕ совпали → исключить;
-//   - иначе → включить.
+// Namespace rules:
+//   - if ExcludeRegex is set and the name matches         -> exclude;
+//   - if ExcludeSelector is set and the ns labels match    -> exclude;
+//   - if IncludeRegex is set and the name does NOT match   -> exclude;
+//   - if IncludeSelector is set and the ns labels do NOT match -> exclude;
+//   - otherwise -> include.
 //
-// Exclude имеет приоритет над Include. Пустые правила ничего не ограничивают.
+// Exclude takes priority over Include. Empty rules impose no restriction.
 //
-// Правила подов:
-//   - если задан PodExcludeSelector и метки пода совпали → под пропускается;
-//   - если задан OwnerKinds — под обрабатывается только если его controller-owner
-//     имеет один из перечисленных Kind (напр. ReplicaSet, Job). «Голые» поды и
-//     поды StatefulSet/DaemonSet при этом не трогаются.
+// Pod rules:
+//   - if PodExcludeSelector is set and the pod labels match -> the pod is skipped;
+//   - if OwnerKinds is set -> the pod is only processed if its controller-owner
+//     has one of the listed Kinds (e.g. ReplicaSet, Job). Bare pods and
+//     StatefulSet/DaemonSet pods are left alone.
 type Filter struct {
 	NsIncludeRe   *regexp.Regexp
 	NsExcludeRe   *regexp.Regexp
@@ -34,12 +34,12 @@ type Filter struct {
 	OwnerKinds    map[string]bool
 }
 
-// NeedsNamespaceLabels — нужно ли подтягивать объект Namespace ради его меток.
+// NeedsNamespaceLabels reports whether the Namespace object needs to be fetched for its labels.
 func (f *Filter) NeedsNamespaceLabels() bool {
 	return f.NsIncludeSel != nil || f.NsExcludeSel != nil
 }
 
-// NamespaceAllowed проверяет namespace по имени и его меткам.
+// NamespaceAllowed checks a namespace by name and by its labels.
 func (f *Filter) NamespaceAllowed(name string, nsLabels map[string]string) bool {
 	lbls := labels.Set(nsLabels)
 
@@ -58,7 +58,7 @@ func (f *Filter) NamespaceAllowed(name string, nsLabels map[string]string) bool 
 	return true
 }
 
-// PodAllowed возвращает false, если под исключён по своим меткам.
+// PodAllowed returns false if the pod is excluded by its own labels.
 func (f *Filter) PodAllowed(podLabels map[string]string) bool {
 	if f.PodExcludeSel != nil && f.PodExcludeSel.Matches(labels.Set(podLabels)) {
 		return false
@@ -66,9 +66,9 @@ func (f *Filter) PodAllowed(podLabels map[string]string) bool {
 	return true
 }
 
-// OwnerAllowed проверяет, что под управляется контроллером разрешённого Kind.
-// Пустой OwnerKinds → ограничения нет. «Голый» под (без controller-owner) при
-// заданном OwnerKinds не проходит.
+// OwnerAllowed checks that the pod is managed by a controller of an allowed Kind.
+// An empty OwnerKinds means no restriction. A bare pod (no controller-owner) with
+// OwnerKinds set does not pass.
 func (f *Filter) OwnerAllowed(refs []metav1.OwnerReference) bool {
 	if len(f.OwnerKinds) == 0 {
 		return true
@@ -81,8 +81,8 @@ func (f *Filter) OwnerAllowed(refs []metav1.OwnerReference) bool {
 	return false
 }
 
-// BuildFilter собирает Filter из строковых параметров (флаги/env).
-// Пустые строки означают «правило не задано».
+// BuildFilter assembles a Filter from string parameters (flags/env).
+// Empty strings mean "rule not set".
 func BuildFilter(
 	nsIncludeRegex, nsExcludeRegex string,
 	nsIncludeSelector, nsExcludeSelector string,
@@ -107,7 +107,7 @@ func BuildFilter(
 		}
 		re, err := regexp.Compile(expr)
 		if err != nil {
-			return nil, fmt.Errorf("%s: неверное регулярное выражение %q: %w", name, expr, err)
+			return nil, fmt.Errorf("%s: invalid regular expression %q: %w", name, expr, err)
 		}
 		return re, nil
 	}
@@ -117,7 +117,7 @@ func BuildFilter(
 		}
 		sel, err := labels.Parse(expr)
 		if err != nil {
-			return nil, fmt.Errorf("%s: неверный label selector %q: %w", name, expr, err)
+			return nil, fmt.Errorf("%s: invalid label selector %q: %w", name, expr, err)
 		}
 		return sel, nil
 	}

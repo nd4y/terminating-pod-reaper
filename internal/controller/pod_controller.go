@@ -19,33 +19,33 @@ import (
 )
 
 var (
-	// Prometheus-метрики (доступны на /metrics менеджера).
+	// Prometheus metrics (exposed on the manager's /metrics endpoint).
 	reapedPods = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "terminating_pod_reaper_pods_force_deleted_total",
-			Help: "Количество подов, принудительно удалённых из состояния Terminating.",
+			Help: "Number of pods force-deleted from the Terminating state.",
 		},
 		[]string{"namespace"},
 	)
 	reapErrors = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "terminating_pod_reaper_delete_errors_total",
-			Help: "Количество ошибок при force-delete зависших подов.",
+			Help: "Number of errors while force-deleting stuck pods.",
 		},
 		[]string{"namespace"},
 	)
 	reapSkipped = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "terminating_pod_reaper_pods_skipped_total",
-			Help: "Количество зависших подов, пропущенных фильтрами или отложенных лимитом удалений (см. label reason).",
+			Help: "Number of stuck pods skipped by filters or deferred by the deletion rate limit (see the reason label).",
 		},
 		[]string{"namespace", "reason"},
 	)
-	// Gauge: текущее число подов, застрявших из-за finalizers (не событий).
+	// Gauge: current number of pods stuck due to finalizers (not an event counter).
 	reapFinalizerBlocked = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "terminating_pod_reaper_pods_finalizer_blocked",
-			Help: "Текущее количество подов, переживших grace-период, но удерживаемых finalizers (force-delete бессилен, нужно ручное вмешательство).",
+			Help: "Current number of pods that outlived their grace period but are held by finalizers (force-delete can't help; manual intervention is required).",
 		},
 		[]string{"namespace"},
 	)
@@ -55,44 +55,44 @@ func init() {
 	metrics.Registry.MustRegister(reapedPods, reapErrors, reapSkipped, reapFinalizerBlocked)
 }
 
-// PodReaper принудительно удаляет поды, пережившие свой terminationGracePeriodSeconds
-// (т.е. застрявшие в состоянии Terminating).
+// PodReaper force-deletes pods that have outlived their terminationGracePeriodSeconds
+// (i.e. are stuck in the Terminating state).
 type PodReaper struct {
 	client.Client
 	DryRun bool
 	Filter *Filter
 
-	// ExtraGrace — дополнительный буфер сверх terminationGracePeriodSeconds
-	// пода (т.е. сверх deletionTimestamp), прежде чем считать под застрявшим.
+	// ExtraGrace is an extra buffer on top of the pod's terminationGracePeriodSeconds
+	// (i.e. on top of deletionTimestamp) before a pod is considered stuck.
 	//
-	// deletionTimestamp — это дедлайн ШТАТНОГО завершения, а не гарантия, что
-	// kubelet уже освободил ресурсы ноды к этому моменту: контейнер runtime,
-	// sidecar (классика — Istio proxy, не всегда мгновенно реагирующий на
-	// SIGTERM) или загруженный узел могут закончить на секунды-десятки секунд
-	// позже номинального дедлайна — это нормально, не «завис». Без буфера
-	// force-delete в T+0 систематически гонится с законным (чуть более
-	// медленным) завершением kubelet и побеждает: пода умирает вроде бы вовремя,
-	// но объект в API исчезает до того, как kubelet реально прибил контейнеры,
-	// что может ненадолго осиротить ресурсы на ноде. Буфер даёт kubelet
-	// честный шанс закончить самому; вмешивается оператор только если под
-	// пережил ещё и этот запас — то есть действительно застрял (мёртвая нода,
-	// зависший finalizer), а не просто чуть медленнее обычного.
+	// deletionTimestamp is the deadline for a GRACEFUL shutdown, not a guarantee
+	// that kubelet has already freed the node's resources by that moment: the
+	// container runtime, a sidecar (classically an Istio proxy, which doesn't
+	// always react to SIGTERM instantly), or a loaded node can legitimately
+	// finish seconds to tens of seconds after the nominal deadline — that's
+	// normal, not "stuck". Without a buffer, force-delete at T+0 systematically
+	// races the legitimate (slightly slower) kubelet cleanup and wins: the pod
+	// object disappears from the API before kubelet has actually killed the
+	// containers, which can briefly orphan resources on the node. The buffer
+	// gives kubelet a fair chance to finish on its own; the operator only steps
+	// in if the pod outlived this extra margin too — i.e. it's genuinely stuck
+	// (dead node, a finalizer that never clears), not just a bit slower than usual.
 	ExtraGrace time.Duration
 
-	// MaxDeletionsPerWindow ограничивает число force-delete за окно Window.
-	// 0 или меньше — без ограничения.
+	// MaxDeletionsPerWindow caps the number of force-deletes per Window.
+	// 0 or less means no limit.
 	MaxDeletionsPerWindow int
-	// Window — размер окна лимитера (обычно равен периоду ресинка кэша).
+	// Window is the rate limiter's window size (usually equal to the cache resync period).
 	Window time.Duration
 
 	mu              sync.Mutex
 	windowStart     time.Time
 	deletedInWindow int
-	blocked         map[types.NamespacedName]string // застрявшие из-за finalizers → namespace
+	blocked         map[types.NamespacedName]string // stuck due to finalizers -> namespace
 }
 
-// allowDeletion резервирует слот на удаление в текущем окне.
-// Возвращает (false, времяДоСбросаОкна), если лимит исчерпан.
+// allowDeletion reserves a deletion slot in the current window.
+// Returns (false, timeUntilWindowReset) if the limit has been exhausted.
 func (r *PodReaper) allowDeletion() (bool, time.Duration) {
 	if r.MaxDeletionsPerWindow <= 0 {
 		return true, 0
@@ -111,8 +111,8 @@ func (r *PodReaper) allowDeletion() (bool, time.Duration) {
 	return false, r.windowStart.Add(r.Window).Sub(now)
 }
 
-// markBlocked/clearBlocked поддерживают gauge «сколько подов сейчас держат finalizers»
-// с дедупликацией по имени пода (счётчик не накручивается повторными событиями).
+// markBlocked/clearBlocked maintain the "pods currently held by finalizers" gauge
+// with dedup by pod name (the counter isn't bumped again by repeat events).
 func (r *PodReaper) markBlocked(nn types.NamespacedName) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -142,26 +142,27 @@ func (r *PodReaper) clearBlocked(nn types.NamespacedName) {
 func (r *PodReaper) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	l := log.FromContext(ctx)
 
-	// Metadata-only: кэшируются только метаданные подов (deletionTimestamp,
-	// ownerReferences, labels, finalizers, uid) — на порядок меньше памяти,
-	// чем полные объекты Pod со spec/status.
+	// Metadata-only: only pod metadata is cached (deletionTimestamp,
+	// ownerReferences, labels, finalizers, uid) — an order of magnitude less
+	// memory than full Pod objects with spec/status.
 	pod := &metav1.PartialObjectMetadata{}
 	pod.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind("Pod"))
 	if err := r.Get(ctx, req.NamespacedName, pod); err != nil {
-		// Под исчез — цель достигнута; убираем из учёта finalizer-blocked.
+		// The pod is gone — goal achieved; drop it from finalizer-blocked tracking.
 		r.clearBlocked(req.NamespacedName)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	// Нас интересуют только поды в состоянии Terminating.
+	// We only care about pods in the Terminating state.
 	if pod.DeletionTimestamp.IsZero() {
 		return ctrl.Result{}, nil
 	}
 
-	// Фильтрация по владельцу / меткам пода / имени и меткам namespace.
+	// Filter by owner / pod labels / namespace name and labels.
 	if r.Filter != nil {
-		// Только поды под управлением разрешённого контроллера (ReplicaSet/Job и т.п.),
-		// который пересоздаст их в живой зоне. StatefulSet/DaemonSet/«голые» — не трогаем.
+		// Only pods managed by an allowed controller kind (ReplicaSet/Job etc.),
+		// which will recreate them in a live zone. StatefulSet/DaemonSet/bare pods
+		// are left alone.
 		if !r.Filter.OwnerAllowed(pod.OwnerReferences) {
 			reapSkipped.WithLabelValues(pod.Namespace, "owner_kind").Inc()
 			return ctrl.Result{}, nil
@@ -175,7 +176,7 @@ func (r *PodReaper) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resul
 		if r.Filter.NeedsNamespaceLabels() {
 			var ns corev1.Namespace
 			if err := r.Get(ctx, types.NamespacedName{Name: pod.Namespace}, &ns); err != nil {
-				// Не смогли прочитать namespace — повторим позже, чем удалять вслепую.
+				// Couldn't read the namespace — retry later rather than delete blindly.
 				return ctrl.Result{}, client.IgnoreNotFound(err)
 			}
 			nsLabels = ns.Labels
@@ -186,9 +187,9 @@ func (r *PodReaper) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resul
 		}
 	}
 
-	// deletionTimestamp = времяЗапросаУдаления + terminationGracePeriodSeconds,
-	// т.е. дедлайн штатной graceful-остановки. Действуем не раньше deadline +
-	// ExtraGrace — см. комментарий у поля ExtraGrace про гонку с kubelet.
+	// deletionTimestamp = deletionRequestTime + terminationGracePeriodSeconds,
+	// i.e. the deadline for a graceful shutdown. We act no earlier than deadline +
+	// ExtraGrace — see the comment on the ExtraGrace field about racing kubelet.
 	deadline := pod.DeletionTimestamp.Time.Add(r.ExtraGrace)
 	if remaining := time.Until(deadline); remaining > 0 {
 		return ctrl.Result{RequeueAfter: remaining}, nil
@@ -198,36 +199,37 @@ func (r *PodReaper) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resul
 		"terminatingSince", pod.DeletionTimestamp.Time.UTC().Format(time.RFC3339),
 		"extraGrace", r.ExtraGrace.String())
 
-	// Под пережил свой grace-период (плюс буфер) — kubelet должен был его убрать, но не убрал.
-	// Если под держат finalizers, force-delete (grace=0) бессилен: он снимает лишь
-	// поды с недоступной ноды, но не удаляет объект, заблокированный finalizer'ом.
-	// Такие случаи только отмечаем gauge-метрикой — авто-снятие finalizers опасно.
+	// The pod outlived its grace period (plus the buffer) — kubelet should have
+	// removed it by now but didn't. If the pod is held by finalizers, force-delete
+	// (grace=0) can't help: it only strips pods from an unreachable node, it
+	// doesn't remove an object blocked by a finalizer. We only record such cases
+	// via a gauge metric — auto-clearing finalizers would be dangerous.
 	if len(pod.Finalizers) > 0 {
 		if r.markBlocked(req.NamespacedName) {
-			l.Info("под застрял в Terminating из-за finalizers; force-delete не поможет — нужно ручное снятие finalizers",
+			l.Info("pod stuck in Terminating due to finalizers; force-delete won't help — finalizers need to be cleared manually",
 				"finalizers", pod.Finalizers)
 		}
 		return ctrl.Result{}, nil
 	}
-	// Finalizers сняты (или их не было) — если ранее числился заблокированным, убираем.
+	// Finalizers cleared (or there never were any) — if previously marked blocked, unmark it.
 	r.clearBlocked(req.NamespacedName)
 
 	if r.DryRun {
-		l.Info("dry-run: под пережил grace-период, был бы удалён принудительно")
+		l.Info("dry-run: pod outlived its grace period, would have been force-deleted")
 		return ctrl.Result{}, nil
 	}
 
-	// Лимит удалений за окно: защищает API-сервер и даёт время контроллерам
-	// пересоздавать поды волнами, а не лавиной.
+	// Deletion rate limit per window: protects the API server and gives
+	// controllers time to recreate pods in waves instead of all at once.
 	if ok, retryIn := r.allowDeletion(); !ok {
 		reapSkipped.WithLabelValues(pod.Namespace, "rate_limited").Inc()
-		l.Info("лимит удалений за окно исчерпан, под будет удалён в следующем окне",
+		l.Info("deletion rate limit exhausted for this window, pod will be deleted in the next window",
 			"retryIn", retryIn.Round(time.Second).String())
 		return ctrl.Result{RequeueAfter: retryIn}, nil
 	}
 
-	// Force-delete: grace-period=0. Precondition по UID защищает от гонки —
-	// не удалим случайно новый под с тем же именем, если старый уже ушёл.
+	// Force-delete: grace-period=0. The UID precondition guards against a race —
+	// we won't accidentally delete a new pod with the same name if the old one is already gone.
 	gracePeriod := int64(0)
 	uid := pod.UID
 	err := r.Delete(ctx, pod, &client.DeleteOptions{
@@ -236,21 +238,21 @@ func (r *PodReaper) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resul
 	})
 	if err != nil {
 		if client.IgnoreNotFound(err) == nil {
-			return ctrl.Result{}, nil // уже удалён между Get и Delete
+			return ctrl.Result{}, nil // already deleted between Get and Delete
 		}
 		reapErrors.WithLabelValues(pod.Namespace).Inc()
-		l.Error(err, "не удалось принудительно удалить зависший под")
-		return ctrl.Result{}, err // controller-runtime повторит с backoff
+		l.Error(err, "failed to force-delete stuck pod")
+		return ctrl.Result{}, err // controller-runtime will retry with backoff
 	}
 
 	reapedPods.WithLabelValues(pod.Namespace).Inc()
-	l.Info("под принудительно удалён из Terminating")
+	l.Info("pod force-deleted from Terminating")
 	return ctrl.Result{}, nil
 }
 
-// terminatingPredicate пропускает события только для подов с deletionTimestamp,
-// чтобы не гонять reconcile на каждый обычный апдейт пода. Delete-события
-// terminating-подов нужны для очистки учёта finalizer-blocked.
+// terminatingPredicate lets through events only for pods with a deletionTimestamp,
+// so reconcile isn't triggered on every ordinary pod update. Delete events for
+// terminating pods are needed to clean up finalizer-blocked tracking.
 func terminatingPredicate() predicate.Predicate {
 	isTerminating := func(o client.Object) bool {
 		return o != nil && !o.GetDeletionTimestamp().IsZero()

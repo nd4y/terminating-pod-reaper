@@ -37,7 +37,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${datasource}"
+        "uid": "${DS_PROMETHEUS}"
       },
       "description": "Total pods force-deleted from Terminating over the last 24h, across selected namespaces.",
       "fieldConfig": {
@@ -96,7 +96,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${datasource}"
+        "uid": "${DS_PROMETHEUS}"
       },
       "description": "Current force-delete throughput. Compare against maxDeletionsPerInterval / rateLimitWindowSeconds to see how close the operator is to its rate limit.",
       "fieldConfig": {
@@ -155,7 +155,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${datasource}"
+        "uid": "${DS_PROMETHEUS}"
       },
       "description": "Live gauge: pods stuck in Terminating that force-delete cannot help with — held by finalizers, need manual intervention.",
       "fieldConfig": {
@@ -222,7 +222,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${datasource}"
+        "uid": "${DS_PROMETHEUS}"
       },
       "description": "Pods currently deferred because the deletion rate limit (maxDeletionsPerInterval per rateLimitWindowSeconds) was exhausted. Sustained non-zero values mean the backlog exceeds the configured throughput.",
       "fieldConfig": {
@@ -285,7 +285,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${datasource}"
+        "uid": "${DS_PROMETHEUS}"
       },
       "description": "force-delete API calls that failed (excluding already-gone pods, which aren't counted as errors).",
       "fieldConfig": {
@@ -348,7 +348,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${datasource}"
+        "uid": "${DS_PROMETHEUS}"
       },
       "description": "1 = this replica currently holds the leader-election lease. With leaderElection disabled or replicaCount=1, this metric may be absent.",
       "fieldConfig": {
@@ -424,7 +424,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${datasource}"
+        "uid": "${DS_PROMETHEUS}"
       },
       "description": "Rate of pods force-deleted from Terminating, per namespace.",
       "fieldConfig": {
@@ -520,7 +520,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${datasource}"
+        "uid": "${DS_PROMETHEUS}"
       },
       "description": "owner_kind / pod_label / namespace = filtered out by config; rate_limited = eligible but deferred by the deletion rate limit.",
       "fieldConfig": {
@@ -616,7 +616,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${datasource}"
+        "uid": "${DS_PROMETHEUS}"
       },
       "fieldConfig": {
         "defaults": {
@@ -711,7 +711,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${datasource}"
+        "uid": "${DS_PROMETHEUS}"
       },
       "description": "Gauge over time — pods held by finalizers that force-delete could not remove. Persistent non-zero values need manual finalizer cleanup.",
       "fieldConfig": {
@@ -819,7 +819,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${datasource}"
+        "uid": "${DS_PROMETHEUS}"
       },
       "description": "controller-runtime's own reconcile counters (success vs error/requeue), independent of the reaper's own business-logic metrics.",
       "fieldConfig": {
@@ -914,7 +914,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${datasource}"
+        "uid": "${DS_PROMETHEUS}"
       },
       "fieldConfig": {
         "defaults": {
@@ -1018,7 +1018,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${datasource}"
+        "uid": "${DS_PROMETHEUS}"
       },
       "description": "Pending pod-reconcile items not yet processed — sustained growth indicates the controller can't keep up.",
       "fieldConfig": {
@@ -1110,7 +1110,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "${datasource}"
+        "uid": "${DS_PROMETHEUS}"
       },
       "description": "Reconciles re-queued after an error (e.g. transient API failures during force-delete).",
       "fieldConfig": {
@@ -1215,8 +1215,8 @@
           "value": "victoriametrics-ecom"
         },
         "includeAll": false,
-        "label": "Data Source",
-        "name": "datasource",
+        "label": "datasource",
+        "name": "DS_PROMETHEUS",
         "options": [],
         "query": "prometheus",
         "refresh": 1,
@@ -1230,11 +1230,10 @@
         },
         "datasource": {
           "type": "prometheus",
-          "uid": "${datasource}"
+          "uid": "${DS_PROMETHEUS}"
         },
         "definition": "label_values(up{job=\"terminating-pod-reaper-metrics\"}, cluster)",
         "includeAll": false,
-        "label": "Cluster",
         "name": "cluster",
         "options": [],
         "query": {

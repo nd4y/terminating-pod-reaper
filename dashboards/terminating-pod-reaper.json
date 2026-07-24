@@ -85,7 +85,7 @@
       "pluginVersion": "11.6.1",
       "targets": [
         {
-          "expr": "sum(increase(terminating_pod_reaper_pods_force_deleted_total{cluster=~\"$cluster\"}[24h]))",
+          "expr": "sum(increase(terminating_pod_reaper_pods_force_deleted_total{cluster=~\"$cluster\"}[24h])) or vector(0)",
           "legendFormat": "force-deleted",
           "refId": "A"
         }
@@ -337,7 +337,7 @@
       "pluginVersion": "11.6.1",
       "targets": [
         {
-          "expr": "sum(increase(terminating_pod_reaper_delete_errors_total{cluster=~\"$cluster\"}[1h]))",
+          "expr": "sum(increase(terminating_pod_reaper_delete_errors_total{cluster=~\"$cluster\"}[1h])) or vector(0)",
           "legendFormat": "errors",
           "refId": "A"
         }

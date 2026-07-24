@@ -1215,7 +1215,7 @@
     {
       "datasource": {
         "type": "victoriametrics-logs-datasource",
-        "uid": "victorialogs-ecom"
+        "uid": "${DS_LOGS}"
       },
       "description": "Per-pod log of force-deletes, finalizer-blocks, rate-limited skips, and delete errors, parsed from the operator's own logs.",
       "fieldConfig": {
@@ -1296,7 +1296,7 @@
         {
           "datasource": {
             "type": "victoriametrics-logs-datasource",
-            "uid": "victorialogs-ecom"
+            "uid": "${DS_LOGS}"
           },
           "expr": "{container=\"terminating-pod-reaper\",cluster=~\"$cluster\"} (\"pod force-deleted from Terminating\" OR \"stuck in Terminating due to finalizers\" OR \"deletion rate limit exhausted\" OR \"failed to force-delete stuck pod\") | unpack_json | fields _time,namespace,name,msg,retryIn,finalizers,error | sort by (_time) desc",
           "refId": "A"
@@ -1355,10 +1355,26 @@
           "value": "victoriametrics-ecom"
         },
         "includeAll": false,
-        "label": "datasource",
+        "label": "metrics datasource",
         "name": "DS_PROMETHEUS",
         "options": [],
         "query": "prometheus",
+        "refresh": 1,
+        "regex": "",
+        "type": "datasource"
+      },
+      {
+        "current": {
+          "text": "VictoriaLogs-ecom",
+          "value": "victorialogs-ecom"
+        },
+        "hide": 0,
+        "includeAll": false,
+        "label": "logs datasource",
+        "multi": false,
+        "name": "DS_LOGS",
+        "options": [],
+        "query": "victoriametrics-logs-datasource",
         "refresh": 1,
         "regex": "",
         "type": "datasource"

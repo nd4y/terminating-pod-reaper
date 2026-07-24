@@ -189,6 +189,15 @@ func (r *PodReaper) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resul
 		}
 	}
 
+	// Заводим нулевую серию для этого namespace в обеих метриках прямо здесь,
+	// а не только в момент первой ошибки/finalizer-блокировки: CounterVec и
+	// GaugeVec из client_golang не публикуют серию по метке, пока WithLabelValues
+	// ни разу не был вызван, так что без этого "проблем не было" неотличимо от
+	// "метрика для этого namespace вообще не собирается" — оба случая дают
+	// в Grafana "No data" вместо честного 0.
+	reapErrors.WithLabelValues(pod.Namespace).Add(0)
+	reapFinalizerBlocked.WithLabelValues(pod.Namespace).Add(0)
+
 	// deletionTimestamp = deletionRequestTime + terminationGracePeriodSeconds,
 	// i.e. the deadline for a graceful shutdown. We act no earlier than deadline +
 	// ExtraGrace — see the comment on the ExtraGrace field about racing kubelet.

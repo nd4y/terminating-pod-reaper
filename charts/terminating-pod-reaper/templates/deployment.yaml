@@ -48,6 +48,8 @@ spec:
               value: {{ .Values.config.maxDeletionsPerInterval | quote }}
             - name: RATE_LIMIT_WINDOW_SECONDS
               value: {{ .Values.config.rateLimitWindowSeconds | quote }}
+            - name: MAX_CONCURRENT_RECONCILES
+              value: {{ .Values.config.maxConcurrentReconciles | quote }}
             - name: SYNC_PERIOD_SECONDS
               value: {{ .Values.config.syncPeriodSeconds | quote }}
             - name: NAMESPACES

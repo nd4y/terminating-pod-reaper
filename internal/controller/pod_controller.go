@@ -12,6 +12,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	crcontroller "sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
@@ -87,6 +88,14 @@ type PodReaper struct {
 	// failure) drain quickly without having to also resync the cache more often.
 	Window time.Duration
 
+	// MaxConcurrentReconciles is the number of reconcile workers running in
+	// parallel. Each force-delete is a synchronous API round-trip, so a single
+	// worker drains a large backlog (the zone-failure scenario this operator
+	// exists for) noticeably slower than a few parallel ones. All shared state
+	// (rate limiter, blocked map) is mutex-protected. 0 or less falls back to
+	// controller-runtime's default (1).
+	MaxConcurrentReconciles int
+
 	mu              sync.Mutex
 	windowStart     time.Time
 	deletedInWindow int
@@ -111,6 +120,20 @@ func (r *PodReaper) allowDeletion() (bool, time.Duration) {
 		return true, 0
 	}
 	return false, r.windowStart.Add(r.Window).Sub(now)
+}
+
+// refundDeletion returns a slot reserved by allowDeletion whose delete didn't
+// actually happen (the pod was already gone, or the API call failed) — otherwise
+// a wave of errors would burn through the window's quota without deleting anything.
+func (r *PodReaper) refundDeletion() {
+	if r.MaxDeletionsPerWindow <= 0 {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.deletedInWindow > 0 {
+		r.deletedInWindow--
+	}
 }
 
 // markBlocked/clearBlocked maintain the "pods currently held by finalizers" gauge
@@ -189,7 +212,7 @@ func (r *PodReaper) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resul
 		}
 	}
 
-	// Заводим нулевую серию для этого namespace во всех трёх метриках прямо
+	// Заводим нулевую серию для этого namespace во всех метриках прямо
 	// здесь, а не только в момент первого реального события: CounterVec и
 	// GaugeVec из client_golang не публикуют серию по метке, пока WithLabelValues
 	// ни разу не был вызван, так что без этого "событий не было" неотличимо от
@@ -201,6 +224,9 @@ func (r *PodReaper) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resul
 	reapedPods.WithLabelValues(pod.Namespace).Add(0)
 	reapErrors.WithLabelValues(pod.Namespace).Add(0)
 	reapFinalizerBlocked.WithLabelValues(pod.Namespace).Add(0)
+	for _, reason := range []string{"owner_kind", "pod_label", "namespace", "rate_limited"} {
+		reapSkipped.WithLabelValues(pod.Namespace, reason).Add(0)
+	}
 
 	// deletionTimestamp = deletionRequestTime + terminationGracePeriodSeconds,
 	// i.e. the deadline for a graceful shutdown. We act no earlier than deadline +
@@ -252,6 +278,7 @@ func (r *PodReaper) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resul
 		Preconditions:      &metav1.Preconditions{UID: &uid},
 	})
 	if err != nil {
+		r.refundDeletion() // the reserved slot wasn't actually spent on a deletion
 		if client.IgnoreNotFound(err) == nil {
 			return ctrl.Result{}, nil // already deleted between Get and Delete
 		}
@@ -281,8 +308,13 @@ func terminatingPredicate() predicate.Predicate {
 }
 
 func (r *PodReaper) SetupWithManager(mgr ctrl.Manager) error {
+	opts := crcontroller.Options{}
+	if r.MaxConcurrentReconciles > 0 {
+		opts.MaxConcurrentReconciles = r.MaxConcurrentReconciles
+	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&corev1.Pod{}, builder.OnlyMetadata, builder.WithPredicates(terminatingPredicate())).
+		WithOptions(opts).
 		Named("terminating-pod-reaper").
 		Complete(r)
 }

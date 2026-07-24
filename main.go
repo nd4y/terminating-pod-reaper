@@ -54,6 +54,7 @@ func main() {
 		syncPeriodSecs      int
 		extraGraceSecs      int
 		rateLimitWindowSecs int
+		maxConcurrent       int
 	)
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "Address for /metrics.")
@@ -85,6 +86,10 @@ func main() {
 		"Window (seconds) for the deletion rate limit (max-deletions-per-interval). Independent of "+
 			"sync-period-seconds — a short window lets the operator clear a large backlog quickly "+
 			"(e.g. after a zone failure) while the cache resync stays infrequent. Defaults to 30.")
+	flag.IntVar(&maxConcurrent, "max-concurrent-reconciles", 4,
+		"Number of reconcile workers running in parallel. Each force-delete is a synchronous API "+
+			"call, so a few parallel workers drain a large backlog (e.g. after a zone failure) much "+
+			"faster than one. Defaults to 4.")
 	flag.IntVar(&extraGraceSecs, "extra-grace-seconds", 60,
 		"Extra buffer (seconds) on top of a pod's terminationGracePeriodSeconds before force-delete. "+
 			"Gives kubelet a fair chance to finish the pod itself (including sidecar containers like the "+
@@ -151,6 +156,14 @@ func main() {
 		}
 		rateLimitWindowSecs = n
 	}
+	if v, ok := os.LookupEnv("MAX_CONCURRENT_RECONCILES"); ok && v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n <= 0 {
+			setupLog.Error(err, "invalid MAX_CONCURRENT_RECONCILES (must be > 0)", "value", v)
+			os.Exit(1)
+		}
+		maxConcurrent = n
+	}
 	if syncPeriodSecs <= 0 {
 		setupLog.Error(nil, "sync-period-seconds must be > 0", "value", syncPeriodSecs)
 		os.Exit(1)
@@ -211,12 +224,13 @@ func main() {
 	}
 
 	if err = (&controller.PodReaper{
-		Client:                mgr.GetClient(),
-		DryRun:                dryRun,
-		Filter:                filter,
-		ExtraGrace:            extraGrace,
-		MaxDeletionsPerWindow: maxDeletions,
-		Window:                rateLimitWindow,
+		Client:                  mgr.GetClient(),
+		DryRun:                  dryRun,
+		Filter:                  filter,
+		ExtraGrace:              extraGrace,
+		MaxDeletionsPerWindow:   maxDeletions,
+		Window:                  rateLimitWindow,
+		MaxConcurrentReconciles: maxConcurrent,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to start controller")
 		os.Exit(1)
@@ -235,6 +249,7 @@ func main() {
 		"podExcludeSelector", podExcludeSelector,
 		"ownerKinds", ownerKinds,
 		"maxDeletionsPerInterval", maxDeletions,
+		"maxConcurrentReconciles", maxConcurrent,
 		"rateLimitWindow", rateLimitWindow.String(),
 		"syncPeriod", syncPeriod.String(),
 		"extraGrace", extraGrace.String())

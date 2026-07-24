@@ -38,6 +38,7 @@ API-сервер кодирует в `metadata.deletionTimestamp` (= время�
 | Жёсткое ограничение watch (список ns) | `--namespaces` | `NAMESPACES` | `""` (весь кластер) |
 | Макс. удалений за окно (0 = без лимита) | `--max-deletions-per-interval` | `MAX_DELETIONS_PER_INTERVAL` | `200` |
 | Окно лимита удалений, сек | `--rate-limit-window-seconds` | `RATE_LIMIT_WINDOW_SECONDS` | `30` |
+| Параллельные reconcile-воркеры | `--max-concurrent-reconciles` | `MAX_CONCURRENT_RECONCILES` | `4` |
 | Период опроса/ресинка кластера, сек | `--sync-period-seconds` | `SYNC_PERIOD_SECONDS` | `600` |
 | Leader election (HA) | `--leader-elect` | — | авто при `replicaCount > 1` |
 
@@ -122,6 +123,7 @@ kubectl -n terminating-pod-reaper logs deploy/terminating-pod-reaper -f
 | `config.extraGraceSeconds` | `60` | буфер сверх grace-периода пода перед force-delete |
 | `config.maxDeletionsPerInterval` | `200` | макс. удалений за окно `rateLimitWindowSeconds` (0 = без лимита) |
 | `config.rateLimitWindowSeconds` | `30` | окно лимита удалений, сек |
+| `config.maxConcurrentReconciles` | `4` | параллельные reconcile-воркеры |
 | `config.syncPeriodSeconds` | `600` | период опроса/ресинка кластера, сек (не влияет на лимит удалений) |
 | `config.filters.namespaceExcludeRegex` | `^kube-system$` | защита kube-system |
 | `podDisruptionBudget.enabled` | `true` | PDB при `replicaCount > 1` |

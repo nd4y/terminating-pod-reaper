@@ -1317,25 +1317,27 @@
           "options": {
             "excludeByName": {
               "Line": true,
+              "TraceID": true,
+              "_msg": true,
+              "_stream": true,
+              "_stream_id": true,
               "_time": true,
-              "labels": true
+              "detected_level": true,
+              "error": true,
+              "finalizers": true,
+              "labels": true,
+              "retryIn": true
             },
             "indexByName": {
               "Time": 0,
-              "error": 6,
-              "finalizers": 5,
               "msg": 3,
               "name": 2,
-              "namespace": 1,
-              "retryIn": 4
+              "namespace": 1
             },
             "renameByName": {
-              "error": "Error",
-              "finalizers": "Finalizers",
               "msg": "Action",
               "name": "Pod",
-              "namespace": "Namespace",
-              "retryIn": "Retry in"
+              "namespace": "Namespace"
             }
           }
         }

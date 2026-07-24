@@ -189,12 +189,16 @@ func (r *PodReaper) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resul
 		}
 	}
 
-	// Заводим нулевую серию для этого namespace в обеих метриках прямо здесь,
-	// а не только в момент первой ошибки/finalizer-блокировки: CounterVec и
+	// Заводим нулевую серию для этого namespace во всех трёх метриках прямо
+	// здесь, а не только в момент первого реального события: CounterVec и
 	// GaugeVec из client_golang не публикуют серию по метке, пока WithLabelValues
-	// ни разу не был вызван, так что без этого "проблем не было" неотличимо от
+	// ни разу не был вызван, так что без этого "событий не было" неотличимо от
 	// "метрика для этого namespace вообще не собирается" — оба случая дают
-	// в Grafana "No data" вместо честного 0.
+	// в Grafana "No data" вместо честного 0. Без этого reapedPods к тому же
+	// теряет уже увиденные namespace при каждом рестарте пода (счётчики живут
+	// только в памяти процесса), пока в этом namespace не случится новый
+	// force-delete.
+	reapedPods.WithLabelValues(pod.Namespace).Add(0)
 	reapErrors.WithLabelValues(pod.Namespace).Add(0)
 	reapFinalizerBlocked.WithLabelValues(pod.Namespace).Add(0)
 

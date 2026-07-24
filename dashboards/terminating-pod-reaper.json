@@ -1232,13 +1232,13 @@
           "type": "prometheus",
           "uid": "${datasource}"
         },
-        "definition": "label_values(terminating_pod_reaper_pods_force_deleted_total, cluster)",
+        "definition": "label_values(up{job=\"terminating-pod-reaper-metrics\"}, cluster)",
         "includeAll": false,
         "label": "Cluster",
         "name": "cluster",
         "options": [],
         "query": {
-          "query": "label_values(terminating_pod_reaper_pods_force_deleted_total, cluster)",
+          "query": "label_values(up{job=\"terminating-pod-reaper-metrics\"}, cluster)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 1,

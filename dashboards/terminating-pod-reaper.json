@@ -1198,15 +1198,155 @@
       ],
       "title": "Workqueue retries",
       "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 38
+      },
+      "id": 30,
+      "panels": [],
+      "title": "Actions log",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "victorialogs-ecom"
+      },
+      "description": "Per-pod log of force-deletes, finalizer-blocks, rate-limited skips, and delete errors, parsed from the operator's own logs.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Action"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "deletion rate limit exhausted for this window, pod will be deleted in the next window": {
+                        "color": "yellow",
+                        "index": 2,
+                        "text": "rate-limited (deferred)"
+                      },
+                      "failed to force-delete stuck pod": {
+                        "color": "red",
+                        "index": 3,
+                        "text": "delete error"
+                      },
+                      "pod force-deleted from Terminating": {
+                        "color": "green",
+                        "index": 0,
+                        "text": "force-deleted"
+                      },
+                      "stuck in Terminating due to finalizers; force-delete won't help — finalizers need to be cleared manually": {
+                        "color": "orange",
+                        "index": 1,
+                        "text": "finalizer-blocked"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 39
+      },
+      "id": 31,
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Time"
+          }
+        ]
+      },
+      "pluginVersion": "11.6.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "victorialogs-ecom"
+          },
+          "expr": "{container=\"terminating-pod-reaper\",cluster=~\"$cluster\"} (\"pod force-deleted from Terminating\" OR \"stuck in Terminating due to finalizers\" OR \"deletion rate limit exhausted\" OR \"failed to force-delete stuck pod\") | unpack_json | fields _time,namespace,name,msg,retryIn,finalizers,error | sort by (_time) desc",
+          "refId": "A"
+        }
+      ],
+      "title": "Force-delete / skip actions",
+      "transformations": [
+        {
+          "id": "extractFields",
+          "options": {
+            "format": "json",
+            "replace": false,
+            "source": "Line"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Line": true,
+              "_time": true,
+              "labels": true
+            },
+            "indexByName": {
+              "Time": 0,
+              "error": 6,
+              "finalizers": 5,
+              "msg": 3,
+              "name": 2,
+              "namespace": 1,
+              "retryIn": 4
+            },
+            "renameByName": {
+              "error": "Error",
+              "finalizers": "Finalizers",
+              "msg": "Action",
+              "name": "Pod",
+              "namespace": "Namespace",
+              "retryIn": "Retry in"
+            }
+          }
+        }
+      ],
+      "type": "table"
     }
   ],
   "preload": false,
   "refresh": "30s",
   "schemaVersion": 41,
-  "tags": [
-    "kubernetes",
-    "terminating-pod-reaper"
-  ],
+  "tags": [],
   "templating": {
     "list": [
       {
@@ -1252,6 +1392,6 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "terminating-pod-reaper",
-  "uid": "terminating-pod-reaper"
+  "title": "Terminating Pod Reaper Overview",
+  "uid": "aft2lg44ksc1sf"
 }

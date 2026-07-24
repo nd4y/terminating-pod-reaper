@@ -8,12 +8,13 @@ the HTTP API.
 
 Set `GRAFANA_URL` and `GRAFANA_TOKEN` (a service-account token) and
 `GRAFANA_FOLDER_UID` (the folder this dashboard lives in) for your instance.
+Dashboard uid: `aft2lg44ksc1sf`.
 
 Pull the live dashboard into this file:
 
 ```bash
 curl -s -H "Authorization: Bearer $GRAFANA_TOKEN" \
-  "$GRAFANA_URL/api/dashboards/uid/terminating-pod-reaper" \
+  "$GRAFANA_URL/api/dashboards/uid/aft2lg44ksc1sf" \
   | jq '.dashboard | del(.id, .version)' > dashboards/terminating-pod-reaper.json
 ```
 

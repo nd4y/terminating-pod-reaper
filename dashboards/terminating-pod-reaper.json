@@ -211,7 +211,7 @@
       "pluginVersion": "11.6.1",
       "targets": [
         {
-          "expr": "sum(terminating_pod_reaper_pods_finalizer_blocked{cluster=~\"$cluster\"})",
+          "expr": "sum(terminating_pod_reaper_pods_finalizer_blocked{cluster=~\"$cluster\"}) or vector(0)",
           "legendFormat": "blocked",
           "refId": "A"
         }
@@ -605,7 +605,7 @@
       "pluginVersion": "11.6.1",
       "targets": [
         {
-          "expr": "sum by (reason) (rate(terminating_pod_reaper_pods_skipped_total{cluster=~\"$cluster\"}[5m])) * 60",
+          "expr": "(sum by (reason) (rate(terminating_pod_reaper_pods_skipped_total{cluster=~\"$cluster\"}[5m])) or vector(0)) * 60",
           "legendFormat": "{{reason}}",
           "refId": "A"
         }
@@ -700,7 +700,7 @@
       "pluginVersion": "11.6.1",
       "targets": [
         {
-          "expr": "sum by (namespace) (rate(terminating_pod_reaper_delete_errors_total{cluster=~\"$cluster\"}[5m])) * 60",
+          "expr": "(sum by (namespace) (rate(terminating_pod_reaper_delete_errors_total{cluster=~\"$cluster\"}[5m])) or vector(0)) * 60",
           "legendFormat": "{{namespace}}",
           "refId": "A"
         }
@@ -795,7 +795,7 @@
       "pluginVersion": "11.6.1",
       "targets": [
         {
-          "expr": "sum by (namespace) (terminating_pod_reaper_pods_finalizer_blocked{cluster=~\"$cluster\"})",
+          "expr": "sum by (namespace) (terminating_pod_reaper_pods_finalizer_blocked{cluster=~\"$cluster\"}) or vector(0)",
           "legendFormat": "{{namespace}}",
           "refId": "A"
         }
@@ -1246,6 +1246,11 @@
                         "index": 2,
                         "text": "rate-limited (deferred)"
                       },
+                      "dry-run: pod outlived its grace period, would have been force-deleted": {
+                        "color": "blue",
+                        "index": 4,
+                        "text": "dry-run (would delete)"
+                      },
                       "failed to force-delete stuck pod": {
                         "color": "red",
                         "index": 3,
@@ -1256,7 +1261,7 @@
                         "index": 0,
                         "text": "force-deleted"
                       },
-                      "stuck in Terminating due to finalizers; force-delete won't help — finalizers need to be cleared manually": {
+                      "pod stuck in Terminating due to finalizers; force-delete won't help — finalizers need to be cleared manually": {
                         "color": "orange",
                         "index": 1,
                         "text": "finalizer-blocked"
@@ -1299,7 +1304,7 @@
             "type": "victoriametrics-logs-datasource",
             "uid": "${DS_LOGS}"
           },
-          "expr": "{container=\"terminating-pod-reaper\",cluster=~\"$cluster\"} (\"pod force-deleted from Terminating\" OR \"stuck in Terminating due to finalizers\" OR \"deletion rate limit exhausted\" OR \"failed to force-delete stuck pod\") | unpack_json | fields _time,namespace,name,msg,retryIn,finalizers,error | sort by (_time) desc",
+          "expr": "{container=\"terminating-pod-reaper\",cluster=~\"$cluster\"} (\"pod force-deleted from Terminating\" OR \"stuck in Terminating due to finalizers\" OR \"deletion rate limit exhausted\" OR \"failed to force-delete stuck pod\" OR \"dry-run: pod outlived its grace period\") | unpack_json | fields _time,namespace,name,msg,retryIn,finalizers,error | sort by (_time) desc",
           "refId": "A"
         }
       ],

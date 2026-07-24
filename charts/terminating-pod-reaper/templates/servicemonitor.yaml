@@ -16,4 +16,10 @@ spec:
   endpoints:
     - port: metrics
       interval: {{ .Values.metrics.serviceMonitor.interval }}
+      # Метрики оператора несут свой собственный лейбл namespace — namespace
+      # обрабатываемого пода, а не namespace самого оператора. Без honorLabels
+      # Prometheus/VictoriaMetrics перезаписывает этот лейбл namespace'ом
+      # scrape-таргета (т.е. namespace'ом самого оператора), и все breakdown'ы
+      # "by namespace" схлопываются в одно значение.
+      honorLabels: true
 {{- end }}

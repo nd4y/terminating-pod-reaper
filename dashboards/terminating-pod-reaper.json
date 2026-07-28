@@ -466,6 +466,7 @@
             }
           },
           "mappings": [],
+          "noValue": "0",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -509,7 +510,7 @@
       "pluginVersion": "11.6.1",
       "targets": [
         {
-          "expr": "(sum by (namespace) (rate(terminating_pod_reaper_pods_force_deleted_total{cluster=~\"$cluster\"}[5m])) or vector(0)) * 60",
+          "expr": "sum by (namespace) (rate(terminating_pod_reaper_pods_force_deleted_total{cluster=~\"$cluster\"}[5m])) * 60",
           "legendFormat": "{{namespace}}",
           "refId": "A"
         }
@@ -562,6 +563,7 @@
             }
           },
           "mappings": [],
+          "noValue": "0",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -605,7 +607,7 @@
       "pluginVersion": "11.6.1",
       "targets": [
         {
-          "expr": "(sum by (reason) (rate(terminating_pod_reaper_pods_skipped_total{cluster=~\"$cluster\"}[5m])) or vector(0)) * 60",
+          "expr": "sum by (reason) (rate(terminating_pod_reaper_pods_skipped_total{cluster=~\"$cluster\"}[5m])) * 60",
           "legendFormat": "{{reason}}",
           "refId": "A"
         }
@@ -657,6 +659,7 @@
             }
           },
           "mappings": [],
+          "noValue": "0",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -700,7 +703,7 @@
       "pluginVersion": "11.6.1",
       "targets": [
         {
-          "expr": "(sum by (namespace) (rate(terminating_pod_reaper_delete_errors_total{cluster=~\"$cluster\"}[5m])) or vector(0)) * 60",
+          "expr": "sum by (namespace) (rate(terminating_pod_reaper_delete_errors_total{cluster=~\"$cluster\"}[5m])) * 60",
           "legendFormat": "{{namespace}}",
           "refId": "A"
         }
@@ -753,6 +756,7 @@
             }
           },
           "mappings": [],
+          "noValue": "0",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -795,7 +799,7 @@
       "pluginVersion": "11.6.1",
       "targets": [
         {
-          "expr": "sum by (namespace) (terminating_pod_reaper_pods_finalizer_blocked{cluster=~\"$cluster\"}) or vector(0)",
+          "expr": "sum by (namespace) (terminating_pod_reaper_pods_finalizer_blocked{cluster=~\"$cluster\"})",
           "legendFormat": "{{namespace}}",
           "refId": "A"
         }

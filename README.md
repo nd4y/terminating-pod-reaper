@@ -1,98 +1,101 @@
 # terminating-pod-reaper
 
-Оператор на `controller-runtime`, который **подписывается (watch) на поды** и принудительно
-удаляет те, что застряли в состоянии `Terminating` — как можно быстрее, но безопасно.
+🇬🇧 **English** | [🇷🇺 Русский](README.ru.md)
 
-Под удаляется, когда истёк его собственный `terminationGracePeriodSeconds` (штатная остановка
-уже должна была завершиться) **плюс** буфер `extraGraceSeconds`. `terminationGracePeriodSeconds`
-API-сервер кодирует в `metadata.deletionTimestamp` (= времяЗапроса + grace) — это дедлайн
-штатного завершения, а не гарантия, что kubelet уже освободил ресурсы ноды к этому моменту:
-контейнер runtime, sidecar (классика — Istio proxy, не всегда мгновенно реагирующий на SIGTERM)
-или загруженный узел могут закончить на секунды позже номинального дедлайна — это нормально,
-не «завис». Без буфера force-delete в T+0 систематически гонится с законным (чуть более
-медленным) завершением kubelet и побеждает: объект пода в API исчезает раньше, чем kubelet
-реально прибил контейнеры. Буфер даёт kubelet честный шанс закончить самому; оператор
-вмешивается, только если под пережил ещё и этот запас — то есть действительно застрял
-(мёртвая нода, зависший finalizer), а не просто чуть медленнее обычного.
+A `controller-runtime` operator that **watches pods** and force-deletes the ones stuck in
+`Terminating` — as fast as possible, but safely.
 
-## Как это работает
+A pod is deleted once its own `terminationGracePeriodSeconds` has expired (graceful shutdown
+should already be over) **plus** an `extraGraceSeconds` buffer. The API server encodes
+`terminationGracePeriodSeconds` into `metadata.deletionTimestamp` (= requestTime + grace) — that
+is the deadline for graceful termination, not a guarantee that kubelet has already released the
+node's resources by then: the container runtime, a sidecar (the classic one being an Istio proxy,
+not always instant to react to SIGTERM) or a loaded node may finish seconds after the nominal
+deadline — which is normal, not "stuck". Without the buffer, a force-delete at T+0 systematically
+races legitimate (slightly slower) kubelet termination and wins: the pod object disappears from
+the API before kubelet has actually killed the containers. The buffer gives kubelet a fair chance
+to finish on its own; the operator steps in only if the pod outlived that allowance too — that is,
+if it is genuinely stuck (dead node, hung finalizer) rather than merely a bit slower than usual.
 
-1. Watch на поды (при желании — только в заданных namespace).
-2. Predicate отфильтровывает всё, кроме подов с проставленным `deletionTimestamp`
-   (обычный трафик апдейтов не тревожит reconcile).
+## How it works
+
+1. Watch pods (optionally restricted to given namespaces).
+2. A predicate filters out everything except pods with a `deletionTimestamp` set (ordinary update
+   traffic never disturbs reconcile).
 3. `Reconcile`:
-   - если `deletionTimestamp + extraGraceSeconds` ещё впереди → `RequeueAfter` ровно до него;
-   - иначе под пережил grace-период (+ буфер):
-     - если его держат **finalizers** → force-delete бессилен: только инкремент метрики
-       `terminating_pod_reaper_pods_finalizer_blocked` и лог (нужно ручное вмешательство);
-     - иначе → force-delete (`grace-period=0`) с `Preconditions.UID` (защита от гонки —
-       не удалим новый под с тем же именем).
-4. Если под исчезает сам — reconcile завершается без действий.
+   - if `deletionTimestamp + extraGraceSeconds` is still ahead → `RequeueAfter` exactly up to it;
+   - otherwise the pod outlived the grace period (+ buffer):
+     - if **finalizers** are holding it → force-delete is powerless: only the
+       `terminating_pod_reaper_pods_finalizer_blocked` metric is incremented and a log line is
+       written (manual intervention required);
+     - otherwise → force-delete (`grace-period=0`) with `Preconditions.UID` (race protection —
+       so a new pod with the same name is never deleted).
+4. If the pod disappears on its own, reconcile finishes without acting.
 
-## Конфигурация
+## Configuration
 
-| Параметр | Флаг | Env | По умолчанию |
+| Setting | Flag | Env | Default |
 |---|---|---|---|
-| Только логировать (безопасный режим) | `--dry-run` | `DRY_RUN` | `true` |
-| Буфер сверх grace-периода, сек | `--extra-grace-seconds` | `EXTRA_GRACE_SECONDS` | `60` |
-| Жёсткое ограничение watch (список ns) | `--namespaces` | `NAMESPACES` | `""` (весь кластер) |
-| Макс. удалений за окно (0 = без лимита) | `--max-deletions-per-interval` | `MAX_DELETIONS_PER_INTERVAL` | `200` |
-| Окно лимита удалений, сек | `--rate-limit-window-seconds` | `RATE_LIMIT_WINDOW_SECONDS` | `30` |
-| Параллельные reconcile-воркеры | `--max-concurrent-reconciles` | `MAX_CONCURRENT_RECONCILES` | `4` |
-| Период опроса/ресинка кластера, сек | `--sync-period-seconds` | `SYNC_PERIOD_SECONDS` | `600` |
-| Leader election (HA) | `--leader-elect` | — | авто при `replicaCount > 1` |
+| Log only (safe mode) | `--dry-run` | `DRY_RUN` | `true` |
+| Buffer on top of the grace period, sec | `--extra-grace-seconds` | `EXTRA_GRACE_SECONDS` | `60` |
+| Hard watch restriction (ns list) | `--namespaces` | `NAMESPACES` | `""` (whole cluster) |
+| Max deletions per window (0 = unlimited) | `--max-deletions-per-interval` | `MAX_DELETIONS_PER_INTERVAL` | `200` |
+| Deletion rate-limit window, sec | `--rate-limit-window-seconds` | `RATE_LIMIT_WINDOW_SECONDS` | `30` |
+| Concurrent reconcile workers | `--max-concurrent-reconciles` | `MAX_CONCURRENT_RECONCILES` | `4` |
+| Cluster poll/resync period, sec | `--sync-period-seconds` | `SYNC_PERIOD_SECONDS` | `600` |
+| Leader election (HA) | `--leader-elect` | — | automatic when `replicaCount > 1` |
 
-Лимит удалений считается в окне длиной `rate-limit-window-seconds` (по умолчанию
-200 подов / 30с) — это отдельный от ресинка кэша параметр: при отказе целой зоны
-оператор быстро вычищает большой backlog волнами по 200 каждые 30с, не создавая
-лавину запросов к API-серверу; «лишние» поды автоматически переносятся на
-следующее окно. `sync-period-seconds` — это полный ресинк watch-кэша, страховка
-от пропущенных событий; на лимит удалений не влияет и обычно значительно больше.
+The deletion limit is counted over a window of `rate-limit-window-seconds` (200 pods / 30s by
+default) — a parameter separate from the cache resync: when a whole zone fails, the operator
+clears a large backlog quickly in waves of 200 every 30s without avalanching the API server;
+"excess" pods automatically roll over into the next window. `sync-period-seconds` is the full
+resync of the watch cache, an insurance against missed events; it does not affect the deletion
+limit and is usually much larger.
 
-Env имеет приоритет над дефолтами флагов.
+Env takes precedence over flag defaults.
 
-> **По умолчанию включён `dry-run`** — оператор только логирует, ничего не удаляет
-> (в лог при старте выводится явное предупреждение). Для реального удаления:
-> `--set config.dryRun=false`.
+> **`dry-run` is on by default** — the operator only logs and deletes nothing (an explicit
+> warning is printed to the log at startup). For real deletion: `--set config.dryRun=false`.
 >
-> **Leader election включается автоматически**, если реплик больше одной — тогда только
-> лидер выполняет reaping (чарт заодно выдаёт RBAC на `leases`). При одной реплике можно
-> включить принудительно через `leaderElection.enabled=true`.
+> **Leader election turns on automatically** when there is more than one replica — then only the
+> leader does the reaping (the chart also grants RBAC on `leases`). With a single replica it can
+> be forced on via `leaderElection.enabled=true`.
 
-### Фильтрация namespace и подов
+### Namespace and pod filtering
 
-Поверх жёсткого `--namespaces` (который сужает watch-кэш) есть «мягкие» фильтры,
-применяемые в reconcile. Логика: **exclude приоритетнее include**; если задано несколько
-include-условий — они работают по И (namespace должен пройти все).
+On top of the hard `--namespaces` (which narrows the watch cache) there are "soft" filters
+applied during reconcile. The logic: **exclude beats include**; if several include conditions are
+set, they are ANDed (the namespace must pass all of them).
 
-| Параметр | Флаг | Env | Смысл |
+| Setting | Flag | Env | Meaning |
 |---|---|---|---|
-| Включить ns по regex имени | `--namespace-include-regex` | `NAMESPACE_INCLUDE_REGEX` | обрабатывать только ns, чьё имя матчит regex |
-| Исключить ns по regex имени | `--namespace-exclude-regex` | `NAMESPACE_EXCLUDE_REGEX` | пропускать ns, чьё имя матчит regex (по умолчанию `^kube-system$`) |
-| Включить ns по label | `--namespace-include-selector` | `NAMESPACE_INCLUDE_SELECTOR` | только ns с метками по selector (напр. `terminating-pod-reaper=enabled`) |
-| Исключить ns по label | `--namespace-exclude-selector` | `NAMESPACE_EXCLUDE_SELECTOR` | пропускать ns с метками по selector |
-| Исключить поды по label | `--pod-exclude-selector` | `POD_EXCLUDE_SELECTOR` | не трогать поды с метками по selector (напр. `terminating-pod-reaper.io/ignore=true`) |
-| Разрешённые владельцы | `--reap-owner-kinds` | `REAP_OWNER_KINDS` | удалять только поды под управлением контроллера с таким Kind (по умолчанию `ReplicaSet,Job`) |
+| Include ns by name regex | `--namespace-include-regex` | `NAMESPACE_INCLUDE_REGEX` | process only namespaces whose name matches the regex |
+| Exclude ns by name regex | `--namespace-exclude-regex` | `NAMESPACE_EXCLUDE_REGEX` | skip namespaces whose name matches the regex (default `^kube-system$`) |
+| Include ns by label | `--namespace-include-selector` | `NAMESPACE_INCLUDE_SELECTOR` | only namespaces matching the selector (e.g. `terminating-pod-reaper=enabled`) |
+| Exclude ns by label | `--namespace-exclude-selector` | `NAMESPACE_EXCLUDE_SELECTOR` | skip namespaces matching the selector |
+| Exclude pods by label | `--pod-exclude-selector` | `POD_EXCLUDE_SELECTOR` | never touch pods matching the selector (e.g. `terminating-pod-reaper.io/ignore=true`) |
+| Allowed owners | `--reap-owner-kinds` | `REAP_OWNER_KINDS` | delete only pods managed by a controller of this Kind (default `ReplicaSet,Job`) |
 
-Selector — стандартный синтаксис Kubernetes label selector (`key=value`, `key!=value`,
-`key in (a,b)`, `key`, `!key`). Фильтрация **по меткам namespace** требует чтения объектов
-`Namespace` (cluster-scoped) — чарт автоматически выдаёт read-only доступ к ним.
+A selector uses the standard Kubernetes label selector syntax (`key=value`, `key!=value`,
+`key in (a,b)`, `key`, `!key`). Filtering **by namespace labels** requires reading `Namespace`
+objects (cluster-scoped) — the chart grants read-only access to them automatically.
 
-### Фильтр по владельцу пода (отказ зоны/ноды)
+### Pod owner filter (zone / node failure)
 
-По умолчанию (`ReplicaSet,Job`) оператор трогает только поды, чей **controller-owner** —
-`ReplicaSet` (т.е. Deployment) или `Job` (т.е. CronJob): такие контроллеры сами пересоздадут
-под в живой зоне. Поды `StatefulSet`, `DaemonSet` и «голые» (без владельца) **пропускаются** —
-для StatefulSet force-delete опасен (split-brain). Owner берётся из `pod.ownerReferences`,
-доп. запросов к API нет.
+By default (`ReplicaSet,Job`) the operator only touches pods whose **controller owner** is a
+`ReplicaSet` (i.e. a Deployment) or a `Job` (i.e. a CronJob): such controllers will recreate the
+pod in a healthy zone themselves. `StatefulSet`, `DaemonSet` and bare (ownerless) pods are
+**skipped** — for a StatefulSet a force-delete is dangerous (split-brain). The owner is taken from
+`pod.ownerReferences`, with no extra API calls.
 
-Это ровно сценарий отказа зоны в Yandex Cloud: при недоступности нод Node Controller выселяет
-поды (ставит `deletionTimestamp`), но они виснут в `Terminating`, пока kubelet мёртв —
-terminating-pod-reaper добивает их после grace-периода, и Deployment/Job поднимают реплики
-в оставшихся зонах.
-Снять ограничение: `--set '{config.ownerKinds}={}'` (пустой список = любой владелец).
+This is exactly the zone-failure scenario in Yandex Cloud: when nodes become unreachable, the Node
+Controller evicts the pods (sets `deletionTimestamp`), but they hang in `Terminating` while
+kubelet is dead — terminating-pod-reaper finishes them off after the grace period, and the
+Deployment/Job bring the replicas up in the remaining zones.
+To lift the restriction: `--set '{config.ownerKinds}={}'` (an empty list = any owner).
 
-Пример: чистить только ns с меткой `terminating-pod-reaper=enabled`, кроме `kube-*`, не трогая помеченные поды:
+Example — clean only namespaces labelled `terminating-pod-reaper=enabled`, except `kube-*`, and
+leave labelled pods alone:
 
 ```bash
 --set config.filters.namespaceIncludeSelector="terminating-pod-reaper=enabled" \
@@ -100,39 +103,39 @@ terminating-pod-reaper добивает их после grace-периода, и
 --set config.filters.podExcludeSelector="terminating-pod-reaper.io/ignore=true"
 ```
 
-## Установка через Helm
+## Installing with Helm
 
 ```bash
-# Из OCI-реестра (без --version ставится последняя опубликованная версия):
+# From the OCI registry (without --version the latest published version is installed):
 helm install terminating-pod-reaper oci://ghcr.io/nd4y/charts/terminating-pod-reaper \
   --namespace terminating-pod-reaper --create-namespace \
   --set image.repository=ghcr.io/nd4y/terminating-pod-reaper
 
-# Или из локальной папки чарта (по умолчанию dry-run, ничего не удаляется):
+# Or from the local chart directory (dry-run by default, nothing is deleted):
 helm install terminating-pod-reaper charts/terminating-pod-reaper \
   --namespace terminating-pod-reaper --create-namespace
 
 kubectl -n terminating-pod-reaper logs deploy/terminating-pod-reaper -f
 ```
 
-Основные values (полный список — в [charts/terminating-pod-reaper/values.yaml](charts/terminating-pod-reaper/values.yaml)):
+Main values (full list in [charts/terminating-pod-reaper/values.yaml](charts/terminating-pod-reaper/values.yaml)):
 
-| Value | По умолчанию | Назначение |
+| Value | Default | Purpose |
 |---|---|---|
-| `config.dryRun` | `true` | только логировать (безопасный режим) |
-| `config.extraGraceSeconds` | `60` | буфер сверх grace-периода пода перед force-delete |
-| `config.maxDeletionsPerInterval` | `200` | макс. удалений за окно `rateLimitWindowSeconds` (0 = без лимита) |
-| `config.rateLimitWindowSeconds` | `30` | окно лимита удалений, сек |
-| `config.maxConcurrentReconciles` | `4` | параллельные reconcile-воркеры |
-| `config.syncPeriodSeconds` | `600` | период опроса/ресинка кластера, сек (не влияет на лимит удалений) |
-| `config.filters.namespaceExcludeRegex` | `^kube-system$` | защита kube-system |
-| `podDisruptionBudget.enabled` | `true` | PDB при `replicaCount > 1` |
-| `config.watchNamespaces` | `[]` | список namespace (пусто = весь кластер) |
-| `rbac.scope` | `cluster` | `cluster` или `namespaced` |
+| `config.dryRun` | `true` | log only (safe mode) |
+| `config.extraGraceSeconds` | `60` | buffer on top of the pod's grace period before force-delete |
+| `config.maxDeletionsPerInterval` | `200` | max deletions per `rateLimitWindowSeconds` window (0 = unlimited) |
+| `config.rateLimitWindowSeconds` | `30` | deletion rate-limit window, sec |
+| `config.maxConcurrentReconciles` | `4` | concurrent reconcile workers |
+| `config.syncPeriodSeconds` | `600` | cluster poll/resync period, sec (does not affect the deletion limit) |
+| `config.filters.namespaceExcludeRegex` | `^kube-system$` | protects kube-system |
+| `podDisruptionBudget.enabled` | `true` | PDB when `replicaCount > 1` |
+| `config.watchNamespaces` | `[]` | namespace list (empty = whole cluster) |
+| `rbac.scope` | `cluster` | `cluster` or `namespaced` |
 | `replicaCount` + `leaderElection.enabled` | `1` / `false` | HA |
-| `metrics.serviceMonitor.enabled` | `false` | ServiceMonitor для Prometheus Operator |
+| `metrics.serviceMonitor.enabled` | `false` | ServiceMonitor for Prometheus Operator |
 
-Ограничение namespace (наименьшие привилегии — Role в каждом ns):
+Restricting to namespaces (least privilege — a Role in each namespace):
 
 ```bash
 helm install terminating-pod-reaper charts/terminating-pod-reaper -n terminating-pod-reaper --create-namespace \
@@ -140,21 +143,21 @@ helm install terminating-pod-reaper charts/terminating-pod-reaper -n terminating
   --set '{config.watchNamespaces}={app-prod,app-staging}'
 ```
 
-### Пример values для кластерного (HA) развёртывания
+### Example values for a cluster-wide (HA) deployment
 
-Для кластера с несколькими зонами (напр. 3 группы нод по зонам в Yandex Cloud): несколько
-реплик, автоматический leader election (reaping делает только лидер), разнос реплик по зонам
-и быстрый уход самого оператора с упавшей ноды.
+For a multi-zone cluster (e.g. 3 node groups across zones in Yandex Cloud): several replicas,
+automatic leader election (only the leader reaps), replicas spread across zones, and the operator
+itself leaving a failed node quickly.
 
 ```yaml
 # values-ha.yaml
-replicaCount: 3            # >1 → leader election включается автоматически
+replicaCount: 3            # >1 → leader election is enabled automatically
 
 config:
-  dryRun: false            # реальное удаление (сначала обкатайте с dryRun: true)
-  # kube-system исключён по умолчанию; ownerKinds по умолчанию ReplicaSet,Job
+  dryRun: false            # real deletion (run it with dryRun: true first)
+  # kube-system is excluded by default; ownerKinds defaults to ReplicaSet,Job
 
-# Разносим реплики оператора по зонам доступности
+# Spread the operator's replicas across availability zones
 affinity:
   podAntiAffinity:
     preferredDuringSchedulingIgnoredDuringExecution:
@@ -165,7 +168,7 @@ affinity:
             matchLabels:
               app.kubernetes.io/name: terminating-pod-reaper
 
-# Чтобы под оператора сам быстро уезжал с недоступной ноды (отказ зоны)
+# So the operator's own pod leaves an unreachable node quickly (zone failure)
 tolerations:
   - key: node.kubernetes.io/unreachable
     operator: Exists
@@ -182,7 +185,7 @@ resources:
 
 metrics:
   serviceMonitor:
-    enabled: true          # если стоит Prometheus Operator
+    enabled: true          # if Prometheus Operator is installed
 ```
 
 ```bash
@@ -192,50 +195,52 @@ helm install terminating-pod-reaper oci://ghcr.io/nd4y/charts/terminating-pod-re
   -f values-ha.yaml
 ```
 
-> Reaping в HA выполняет только текущий лидер, остальные реплики — горячий резерв.
-> При отказе зоны с лидером аренда (`lease`) перехватывается живой репликой за несколько секунд.
+> In HA only the current leader reaps; the other replicas are a hot standby. If the leader's zone
+> fails, the `lease` is taken over by a live replica within a few seconds.
 
-## Метрики (Prometheus, на `:8080/metrics`)
+## Metrics (Prometheus, on `:8080/metrics`)
 
-- `terminating_pod_reaper_pods_force_deleted_total{namespace}` — сколько подов удалено.
-- `terminating_pod_reaper_delete_errors_total{namespace}` — ошибки force-delete.
-- `terminating_pod_reaper_pods_skipped_total{namespace,reason}` — сколько зависших подов
-  пропущено фильтрами (`owner_kind`, `pod_label`, `namespace`) или отложено лимитом (`rate_limited`).
-- `terminating_pod_reaper_pods_finalizer_blocked{namespace}` — **gauge**: сколько подов прямо
-  сейчас пережили grace-период, но удерживаются finalizers (force-delete бессилен, требуется
-  ручное вмешательство) — удобно вешать алерт `> 0`.
-- плюс стандартные метрики controller-runtime (глубина очереди, длительность reconcile и т.д.).
+- `terminating_pod_reaper_pods_force_deleted_total{namespace}` — how many pods were deleted.
+- `terminating_pod_reaper_delete_errors_total{namespace}` — force-delete errors.
+- `terminating_pod_reaper_pods_skipped_total{namespace,reason}` — how many stuck pods were skipped
+  by the filters (`owner_kind`, `pod_label`, `namespace`) or deferred by the rate limit
+  (`rate_limited`).
+- `terminating_pod_reaper_pods_finalizer_blocked{namespace}` — a **gauge**: how many pods right now
+  have outlived the grace period but are held by finalizers (force-delete is powerless, manual
+  intervention required) — a convenient `> 0` alert.
+- plus the standard controller-runtime metrics (queue depth, reconcile duration and so on).
 
-## Ограничение по namespace
+## Restricting to namespaces
 
-`rbac.scope=cluster` (по умолчанию) даёт `ClusterRole` на весь кластер. Для наименьших
-привилегий используйте `rbac.scope=namespaced` + `config.watchNamespaces` — чарт создаст
-`Role`/`RoleBinding` в каждом из указанных namespace и сузит watch-кэш (см. пример с
-`--set rbac.scope=namespaced` выше). Если при этом задействованы фильтры по **меткам**
-namespace, чарт дополнительно выдаёт read-only `ClusterRole` только на `namespaces`.
+`rbac.scope=cluster` (the default) grants a cluster-wide `ClusterRole`. For least privilege use
+`rbac.scope=namespaced` + `config.watchNamespaces` — the chart will create a `Role`/`RoleBinding`
+in each listed namespace and narrow the watch cache (see the `--set rbac.scope=namespaced` example
+above). If namespace **label** filters are in play as well, the chart additionally grants a
+read-only `ClusterRole` on `namespaces` only.
 
-## Тестирование
+## Testing
 
-Три уровня, от быстрого к реалистичному:
+Three levels, from fast to realistic:
 
-| Уровень | Что проверяет | Где | Как запустить |
+| Level | What it checks | Where | How to run |
 |---|---|---|---|
-| Unit | логика фильтров (namespace/label/owner) | job `ci → go` | `go test ./...` |
-| Интеграционные (envtest) | reconcile против настоящего kube-apiserver: тайминг, owner-фильтр, ветка finalizer | job `ci → envtest` | `KUBEBUILDER_ASSETS=$(setup-envtest use -p path) go test -tags=integration ./...` |
-| E2E (kind) | полный путь: «смерть» ноды → добивание пода Deployment, StatefulSet не тронут | workflow `e2e` (kind) | `bash test/e2e/run.sh` |
+| Unit | filter logic (namespace/label/owner) | job `ci → go` | `go test ./...` |
+| Integration (envtest) | reconcile against a real kube-apiserver: timing, owner filter, finalizer branch | job `ci → envtest` | `KUBEBUILDER_ASSETS=$(setup-envtest use -p path) go test -tags=integration ./...` |
+| E2E (kind) | the full path: node "death" → a Deployment pod is reaped, a StatefulSet is left alone | workflow `e2e` (kind) | `bash test/e2e/run.sh` |
 
-Реальный отказ зоны в Yandex Cloud (SecurityGroup, блокирующая трафик группе нод) в CI не
-воспроизводится — это chaos-тест для staging (можно отдельным `workflow_dispatch`-пайплайном
-против живого кластера). В CI имитируется *симптом* (поды в `Terminating` с нужными owner’ами),
-а не *причина* (сетевой разрыв).
+A real zone failure in Yandex Cloud (a SecurityGroup blocking traffic to a node group) is not
+reproducible in CI — that is a chaos test for staging (possible as a separate `workflow_dispatch`
+pipeline against a live cluster). CI simulates the *symptom* (pods in `Terminating` with the right
+owners), not the *cause* (a network partition).
 
-## ⚠️ Важно
+## ⚠️ Important
 
-Force-delete убирает запись пода из etcd, но **не гарантирует** остановку контейнера на ноде
-(например, если kubelet недоступен). Для **StatefulSet** это риск двойного запуска (split-brain) —
-применяйте осознанно. Массовые зависания в `Terminating` — симптом проблемы (зависшие finalizers,
-упавшие ноды, не отмонтируемые volume); оператор лечит следствие, а не причину.
+A force-delete removes the pod record from etcd but does **not** guarantee that the container on
+the node stops (for example, if kubelet is unreachable). For a **StatefulSet** this risks a double
+run (split-brain) — apply it deliberately. Mass hangs in `Terminating` are a symptom of a problem
+(hung finalizers, failed nodes, volumes that will not unmount); the operator treats the effect,
+not the cause.
 
-## Лицензия
+## License
 
 [MIT](LICENSE) — open source.

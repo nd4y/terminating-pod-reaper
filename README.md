@@ -34,16 +34,16 @@ if it is genuinely stuck (dead node, hung finalizer) rather than merely a bit sl
 
 ## Configuration
 
-| Setting | Flag | Env | Default |
-|---|---|---|---|
-| Log only (safe mode) | `--dry-run` | `DRY_RUN` | `true` |
-| Buffer on top of the grace period, sec | `--extra-grace-seconds` | `EXTRA_GRACE_SECONDS` | `60` |
-| Hard watch restriction (ns list) | `--namespaces` | `NAMESPACES` | `""` (whole cluster) |
-| Max deletions per window (0 = unlimited) | `--max-deletions-per-interval` | `MAX_DELETIONS_PER_INTERVAL` | `200` |
-| Deletion rate-limit window, sec | `--rate-limit-window-seconds` | `RATE_LIMIT_WINDOW_SECONDS` | `30` |
-| Concurrent reconcile workers | `--max-concurrent-reconciles` | `MAX_CONCURRENT_RECONCILES` | `4` |
-| Cluster poll/resync period, sec | `--sync-period-seconds` | `SYNC_PERIOD_SECONDS` | `600` |
-| Leader election (HA) | `--leader-elect` | — | automatic when `replicaCount > 1` |
+| Setting                                  | Flag                           | Env                          | Default                           |
+| ---------------------------------------- | ------------------------------ | ---------------------------- | --------------------------------- |
+| Log only (safe mode)                     | `--dry-run`                    | `DRY_RUN`                    | `true`                            |
+| Buffer on top of the grace period, sec   | `--extra-grace-seconds`        | `EXTRA_GRACE_SECONDS`        | `60`                              |
+| Hard watch restriction (ns list)         | `--namespaces`                 | `NAMESPACES`                 | `""` (whole cluster)              |
+| Max deletions per window (0 = unlimited) | `--max-deletions-per-interval` | `MAX_DELETIONS_PER_INTERVAL` | `200`                             |
+| Deletion rate-limit window, sec          | `--rate-limit-window-seconds`  | `RATE_LIMIT_WINDOW_SECONDS`  | `30`                              |
+| Concurrent reconcile workers             | `--max-concurrent-reconciles`  | `MAX_CONCURRENT_RECONCILES`  | `4`                               |
+| Cluster poll/resync period, sec          | `--sync-period-seconds`        | `SYNC_PERIOD_SECONDS`        | `600`                             |
+| Leader election (HA)                     | `--leader-elect`               | —                            | automatic when `replicaCount > 1` |
 
 The deletion limit is counted over a window of `rate-limit-window-seconds` (200 pods / 30s by
 default) — a parameter separate from the cache resync: when a whole zone fails, the operator
@@ -67,14 +67,14 @@ On top of the hard `--namespaces` (which narrows the watch cache) there are "sof
 applied during reconcile. The logic: **exclude beats include**; if several include conditions are
 set, they are ANDed (the namespace must pass all of them).
 
-| Setting | Flag | Env | Meaning |
-|---|---|---|---|
-| Include ns by name regex | `--namespace-include-regex` | `NAMESPACE_INCLUDE_REGEX` | process only namespaces whose name matches the regex |
-| Exclude ns by name regex | `--namespace-exclude-regex` | `NAMESPACE_EXCLUDE_REGEX` | skip namespaces whose name matches the regex (default `^kube-system$`) |
-| Include ns by label | `--namespace-include-selector` | `NAMESPACE_INCLUDE_SELECTOR` | only namespaces matching the selector (e.g. `terminating-pod-reaper=enabled`) |
-| Exclude ns by label | `--namespace-exclude-selector` | `NAMESPACE_EXCLUDE_SELECTOR` | skip namespaces matching the selector |
-| Exclude pods by label | `--pod-exclude-selector` | `POD_EXCLUDE_SELECTOR` | never touch pods matching the selector (e.g. `terminating-pod-reaper.io/ignore=true`) |
-| Allowed owners | `--reap-owner-kinds` | `REAP_OWNER_KINDS` | delete only pods managed by a controller of this Kind (default `ReplicaSet,Job`) |
+| Setting                  | Flag                           | Env                          | Meaning                                                                               |
+| ------------------------ | ------------------------------ | ---------------------------- | ------------------------------------------------------------------------------------- |
+| Include ns by name regex | `--namespace-include-regex`    | `NAMESPACE_INCLUDE_REGEX`    | process only namespaces whose name matches the regex                                  |
+| Exclude ns by name regex | `--namespace-exclude-regex`    | `NAMESPACE_EXCLUDE_REGEX`    | skip namespaces whose name matches the regex (default `^kube-system$`)                |
+| Include ns by label      | `--namespace-include-selector` | `NAMESPACE_INCLUDE_SELECTOR` | only namespaces matching the selector (e.g. `terminating-pod-reaper=enabled`)         |
+| Exclude ns by label      | `--namespace-exclude-selector` | `NAMESPACE_EXCLUDE_SELECTOR` | skip namespaces matching the selector                                                 |
+| Exclude pods by label    | `--pod-exclude-selector`       | `POD_EXCLUDE_SELECTOR`       | never touch pods matching the selector (e.g. `terminating-pod-reaper.io/ignore=true`) |
+| Allowed owners           | `--reap-owner-kinds`           | `REAP_OWNER_KINDS`           | delete only pods managed by a controller of this Kind (default `ReplicaSet,Job`)      |
 
 A selector uses the standard Kubernetes label selector syntax (`key=value`, `key!=value`,
 `key in (a,b)`, `key`, `!key`). Filtering **by namespace labels** requires reading `Namespace`
@@ -120,20 +120,20 @@ kubectl -n terminating-pod-reaper logs deploy/terminating-pod-reaper -f
 
 Main values (full list in [charts/terminating-pod-reaper/values.yaml](charts/terminating-pod-reaper/values.yaml)):
 
-| Value | Default | Purpose |
-|---|---|---|
-| `config.dryRun` | `true` | log only (safe mode) |
-| `config.extraGraceSeconds` | `60` | buffer on top of the pod's grace period before force-delete |
-| `config.maxDeletionsPerInterval` | `200` | max deletions per `rateLimitWindowSeconds` window (0 = unlimited) |
-| `config.rateLimitWindowSeconds` | `30` | deletion rate-limit window, sec |
-| `config.maxConcurrentReconciles` | `4` | concurrent reconcile workers |
-| `config.syncPeriodSeconds` | `600` | cluster poll/resync period, sec (does not affect the deletion limit) |
-| `config.filters.namespaceExcludeRegex` | `^kube-system$` | protects kube-system |
-| `podDisruptionBudget.enabled` | `true` | PDB when `replicaCount > 1` |
-| `config.watchNamespaces` | `[]` | namespace list (empty = whole cluster) |
-| `rbac.scope` | `cluster` | `cluster` or `namespaced` |
-| `replicaCount` + `leaderElection.enabled` | `1` / `false` | HA |
-| `metrics.serviceMonitor.enabled` | `false` | ServiceMonitor for Prometheus Operator |
+| Value                                     | Default         | Purpose                                                              |
+| ----------------------------------------- | --------------- | -------------------------------------------------------------------- |
+| `config.dryRun`                           | `true`          | log only (safe mode)                                                 |
+| `config.extraGraceSeconds`                | `60`            | buffer on top of the pod's grace period before force-delete          |
+| `config.maxDeletionsPerInterval`          | `200`           | max deletions per `rateLimitWindowSeconds` window (0 = unlimited)    |
+| `config.rateLimitWindowSeconds`           | `30`            | deletion rate-limit window, sec                                      |
+| `config.maxConcurrentReconciles`          | `4`             | concurrent reconcile workers                                         |
+| `config.syncPeriodSeconds`                | `600`           | cluster poll/resync period, sec (does not affect the deletion limit) |
+| `config.filters.namespaceExcludeRegex`    | `^kube-system$` | protects kube-system                                                 |
+| `podDisruptionBudget.enabled`             | `true`          | PDB when `replicaCount > 1`                                          |
+| `config.watchNamespaces`                  | `[]`            | namespace list (empty = whole cluster)                               |
+| `rbac.scope`                              | `cluster`       | `cluster` or `namespaced`                                            |
+| `replicaCount` + `leaderElection.enabled` | `1` / `false`   | HA                                                                   |
+| `metrics.serviceMonitor.enabled`          | `false`         | ServiceMonitor for Prometheus Operator                               |
 
 Restricting to namespaces (least privilege — a Role in each namespace):
 
@@ -151,10 +151,10 @@ itself leaving a failed node quickly.
 
 ```yaml
 # values-ha.yaml
-replicaCount: 3            # >1 → leader election is enabled automatically
+replicaCount: 3 # >1 → leader election is enabled automatically
 
 config:
-  dryRun: false            # real deletion (run it with dryRun: true first)
+  dryRun: false # real deletion (run it with dryRun: true first)
   # kube-system is excluded by default; ownerKinds defaults to ReplicaSet,Job
 
 # Spread the operator's replicas across availability zones
@@ -181,11 +181,11 @@ tolerations:
 
 resources:
   requests: { cpu: 50m, memory: 64Mi }
-  limits:   { cpu: 200m, memory: 128Mi }
+  limits: { cpu: 200m, memory: 128Mi }
 
 metrics:
   serviceMonitor:
-    enabled: true          # if Prometheus Operator is installed
+    enabled: true # if Prometheus Operator is installed
 ```
 
 ```bash
@@ -222,16 +222,16 @@ read-only `ClusterRole` on `namespaces` only.
 
 Three levels, from fast to realistic:
 
-| Level | What it checks | Where | How to run |
-|---|---|---|---|
-| Unit | filter logic (namespace/label/owner) | job `ci → go` | `go test ./...` |
-| Integration (envtest) | reconcile against a real kube-apiserver: timing, owner filter, finalizer branch | job `ci → envtest` | `KUBEBUILDER_ASSETS=$(setup-envtest use -p path) go test -tags=integration ./...` |
-| E2E (kind) | the full path: node "death" → a Deployment pod is reaped, a StatefulSet is left alone | workflow `e2e` (kind) | `bash test/e2e/run.sh` |
+| Level                 | What it checks                                                                        | Where                 | How to run                                                                        |
+| --------------------- | ------------------------------------------------------------------------------------- | --------------------- | --------------------------------------------------------------------------------- |
+| Unit                  | filter logic (namespace/label/owner)                                                  | job `ci → go`         | `go test ./...`                                                                   |
+| Integration (envtest) | reconcile against a real kube-apiserver: timing, owner filter, finalizer branch       | job `ci → envtest`    | `KUBEBUILDER_ASSETS=$(setup-envtest use -p path) go test -tags=integration ./...` |
+| E2E (kind)            | the full path: node "death" → a Deployment pod is reaped, a StatefulSet is left alone | workflow `e2e` (kind) | `bash test/e2e/run.sh`                                                            |
 
 A real zone failure in Yandex Cloud (a SecurityGroup blocking traffic to a node group) is not
 reproducible in CI — that is a chaos test for staging (possible as a separate `workflow_dispatch`
-pipeline against a live cluster). CI simulates the *symptom* (pods in `Terminating` with the right
-owners), not the *cause* (a network partition).
+pipeline against a live cluster). CI simulates the _symptom_ (pods in `Terminating` with the right
+owners), not the _cause_ (a network partition).
 
 ## ⚠️ Important
 
@@ -244,3 +244,7 @@ not the cause.
 ## License
 
 [MIT](LICENSE) — open source.
+
+## Development standard
+
+This repository adopts version 0.4.0 of the shared development standard. Read the [English guide](docs/en/development-standard.md) or [Russian guide](docs/ru/development-standard.md). The local toolkit checks staged secrets, changed-file formatting and bilingual documentation before merge. Existing product CI remains in place. Adoption is in progress; product acceptance and legacy-document translation are recorded separately in .repo-policy.json.

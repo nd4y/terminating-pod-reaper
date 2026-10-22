@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "standardVersion": "0.4.0",
+  "kind": "product",
+  "lifecycle": "active",
+  "adoption": "adopting",
+  "profiles": ["infra", "service"],
+  "docs": {
+    "mode": "strict",
+    "readmes": ["README.md", "README.ru.md"],
+    "roots": ["docs/en", "docs/ru"]
+  },
+  "evidence": {
+    "ci": {
+      "status": "NOT_VERIFIED"
+    },
+    "bootstrap": {
+      "status": "NOT_VERIFIED"
+    },
+    "release": {
+      "status": "NOT_VERIFIED"
+    },
+    "runtime": {
+      "status": "NOT_VERIFIED"
+    },
+    "fullHistory": {
+      "status": "NOT_VERIFIED"
+    },
+    "fullFormatting": {
+      "status": "NOT_VERIFIED"
+    },
+    "bilingualLegacyDocs": {
+      "status": "NOT_VERIFIED"
+    },
+    "presentation": {
+      "status": "NOT_VERIFIED"
+    },
+    "hostingEnforcement": {
+      "status": "NOT_VERIFIED"
+    },
+    "profile:infra": {
+      "status": "NOT_VERIFIED"
+    },
+    "profile:service": {
+      "status": "NOT_VERIFIED"
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "version": "0.4.0",
+  "source": "nd4y/development-standard",
+  "bundleSha256": "44b72124d6a37b1e9253a2afded78ce2df69975c98451c59b9c6dce2beda6109",
+  "files": {
+    ".standards/package.json": "4dcaf719c081f4463085262ef299c58df4d18e62e0a0eebd72520792d217176d",
+    ".standards/package-lock.json": "23e06994b68a1947ff5d741a5511fcd5f3ec0ed59b4c5c4d07f56bbdcd7cf9ec",
+    ".standards/.gitignore": "c6f387cdf6c18195a3922e7cba2fc8909b6166b497fbd8d31f2493740cdc7ad3",
+    ".standards/.gitattributes": "a79691a93b46e49ce460c26ef22afcc03d6eca1e63bf2edbc20e96159510f6c9",
+    ".standards/gitleaks.toml": "201a823db4fb25c03a36a53f8ef561952aafc4d68bd6c23d6c46ddc9f34ab19d",
+    ".standards/format.json": "e482a6492f4a69a510e5d212eefe0e6372c075440dc8689f91d3359ede944f2c",
+    ".standards/policy.mjs": "57d71a2e5d95790b20519043779737aff2b7c08170a7ca4a18e48662a624fa02",
+    ".standards/check.mjs": "4654c9eea2e7c6a18cf8c67c7a0a117a040cbcf0cd8665a042f9b8ce2f9c6ac0",
+    ".standards/install-gitleaks.mjs": "df6b5b637665366c963001a2b728937372f98419e444654bf2b4341c5f7d7983",
+    ".standards/install-hooks.mjs": "7e3b365830a328315d19ac137e2f7c7e75b297e23c804fbb0b9589ac7cd6e0e0",
+    ".standards/hook.mjs": "9aa869a8ed0757793cc144f2439307ccd309795edc6c3e9a203965a0767f44f8",
+    ".standards/hooks/pre-commit": "6f3eec3535d1a3ca0bf76011860c9f12140e463b91fe0cba1e5d3ec660a0f238",
+    ".standards/rules.en.md": "ee879cfe8369c126a04103d30f0bbd42ee78cc8c305dc4898182696b94cb8554",
+    ".standards/rules.ru.md": "0a1fc47ee6fd529ea7c7aefdfaf8bb3be57e445c9b8669642aa50ceab1b2f41a",
+    ".standards/LICENSE": "95ecb97ecc8e1e4f0e85bc79ae349283d496c2991c703633b769fc7bcf260450"
+  }
+}

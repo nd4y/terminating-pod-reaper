@@ -1,0 +1,12 @@
+{
+  "name": "@nd4y/repository-standard-kit",
+  "version": "0.4.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "prettier": "3.9.10"
+  }
+}

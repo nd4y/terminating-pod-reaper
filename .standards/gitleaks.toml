@@ -1,0 +1,4 @@
+title = "Repository standard: default Gitleaks detectors"
+
+[extend]
+useDefault = true

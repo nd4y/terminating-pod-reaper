@@ -33,16 +33,16 @@ API-сервер кодирует в `metadata.deletionTimestamp` (= время�
 
 ## Конфигурация
 
-| Параметр | Флаг | Env | По умолчанию |
-|---|---|---|---|
-| Только логировать (безопасный режим) | `--dry-run` | `DRY_RUN` | `true` |
-| Буфер сверх grace-периода, сек | `--extra-grace-seconds` | `EXTRA_GRACE_SECONDS` | `60` |
-| Жёсткое ограничение watch (список ns) | `--namespaces` | `NAMESPACES` | `""` (весь кластер) |
-| Макс. удалений за окно (0 = без лимита) | `--max-deletions-per-interval` | `MAX_DELETIONS_PER_INTERVAL` | `200` |
-| Окно лимита удалений, сек | `--rate-limit-window-seconds` | `RATE_LIMIT_WINDOW_SECONDS` | `30` |
-| Параллельные reconcile-воркеры | `--max-concurrent-reconciles` | `MAX_CONCURRENT_RECONCILES` | `4` |
-| Период опроса/ресинка кластера, сек | `--sync-period-seconds` | `SYNC_PERIOD_SECONDS` | `600` |
-| Leader election (HA) | `--leader-elect` | — | авто при `replicaCount > 1` |
+| Параметр                                | Флаг                           | Env                          | По умолчанию                |
+| --------------------------------------- | ------------------------------ | ---------------------------- | --------------------------- |
+| Только логировать (безопасный режим)    | `--dry-run`                    | `DRY_RUN`                    | `true`                      |
+| Буфер сверх grace-периода, сек          | `--extra-grace-seconds`        | `EXTRA_GRACE_SECONDS`        | `60`                        |
+| Жёсткое ограничение watch (список ns)   | `--namespaces`                 | `NAMESPACES`                 | `""` (весь кластер)         |
+| Макс. удалений за окно (0 = без лимита) | `--max-deletions-per-interval` | `MAX_DELETIONS_PER_INTERVAL` | `200`                       |
+| Окно лимита удалений, сек               | `--rate-limit-window-seconds`  | `RATE_LIMIT_WINDOW_SECONDS`  | `30`                        |
+| Параллельные reconcile-воркеры          | `--max-concurrent-reconciles`  | `MAX_CONCURRENT_RECONCILES`  | `4`                         |
+| Период опроса/ресинка кластера, сек     | `--sync-period-seconds`        | `SYNC_PERIOD_SECONDS`        | `600`                       |
+| Leader election (HA)                    | `--leader-elect`               | —                            | авто при `replicaCount > 1` |
 
 Лимит удалений считается в окне длиной `rate-limit-window-seconds` (по умолчанию
 200 подов / 30с) — это отдельный от ресинка кэша параметр: при отказе целой зоны
@@ -67,14 +67,14 @@ Env имеет приоритет над дефолтами флагов.
 применяемые в reconcile. Логика: **exclude приоритетнее include**; если задано несколько
 include-условий — они работают по И (namespace должен пройти все).
 
-| Параметр | Флаг | Env | Смысл |
-|---|---|---|---|
-| Включить ns по regex имени | `--namespace-include-regex` | `NAMESPACE_INCLUDE_REGEX` | обрабатывать только ns, чьё имя матчит regex |
-| Исключить ns по regex имени | `--namespace-exclude-regex` | `NAMESPACE_EXCLUDE_REGEX` | пропускать ns, чьё имя матчит regex (по умолчанию `^kube-system$`) |
-| Включить ns по label | `--namespace-include-selector` | `NAMESPACE_INCLUDE_SELECTOR` | только ns с метками по selector (напр. `terminating-pod-reaper=enabled`) |
-| Исключить ns по label | `--namespace-exclude-selector` | `NAMESPACE_EXCLUDE_SELECTOR` | пропускать ns с метками по selector |
-| Исключить поды по label | `--pod-exclude-selector` | `POD_EXCLUDE_SELECTOR` | не трогать поды с метками по selector (напр. `terminating-pod-reaper.io/ignore=true`) |
-| Разрешённые владельцы | `--reap-owner-kinds` | `REAP_OWNER_KINDS` | удалять только поды под управлением контроллера с таким Kind (по умолчанию `ReplicaSet,Job`) |
+| Параметр                    | Флаг                           | Env                          | Смысл                                                                                        |
+| --------------------------- | ------------------------------ | ---------------------------- | -------------------------------------------------------------------------------------------- |
+| Включить ns по regex имени  | `--namespace-include-regex`    | `NAMESPACE_INCLUDE_REGEX`    | обрабатывать только ns, чьё имя матчит regex                                                 |
+| Исключить ns по regex имени | `--namespace-exclude-regex`    | `NAMESPACE_EXCLUDE_REGEX`    | пропускать ns, чьё имя матчит regex (по умолчанию `^kube-system$`)                           |
+| Включить ns по label        | `--namespace-include-selector` | `NAMESPACE_INCLUDE_SELECTOR` | только ns с метками по selector (напр. `terminating-pod-reaper=enabled`)                     |
+| Исключить ns по label       | `--namespace-exclude-selector` | `NAMESPACE_EXCLUDE_SELECTOR` | пропускать ns с метками по selector                                                          |
+| Исключить поды по label     | `--pod-exclude-selector`       | `POD_EXCLUDE_SELECTOR`       | не трогать поды с метками по selector (напр. `terminating-pod-reaper.io/ignore=true`)        |
+| Разрешённые владельцы       | `--reap-owner-kinds`           | `REAP_OWNER_KINDS`           | удалять только поды под управлением контроллера с таким Kind (по умолчанию `ReplicaSet,Job`) |
 
 Selector — стандартный синтаксис Kubernetes label selector (`key=value`, `key!=value`,
 `key in (a,b)`, `key`, `!key`). Фильтрация **по меткам namespace** требует чтения объектов
@@ -119,20 +119,20 @@ kubectl -n terminating-pod-reaper logs deploy/terminating-pod-reaper -f
 
 Основные values (полный список — в [charts/terminating-pod-reaper/values.yaml](charts/terminating-pod-reaper/values.yaml)):
 
-| Value | По умолчанию | Назначение |
-|---|---|---|
-| `config.dryRun` | `true` | только логировать (безопасный режим) |
-| `config.extraGraceSeconds` | `60` | буфер сверх grace-периода пода перед force-delete |
-| `config.maxDeletionsPerInterval` | `200` | макс. удалений за окно `rateLimitWindowSeconds` (0 = без лимита) |
-| `config.rateLimitWindowSeconds` | `30` | окно лимита удалений, сек |
-| `config.maxConcurrentReconciles` | `4` | параллельные reconcile-воркеры |
-| `config.syncPeriodSeconds` | `600` | период опроса/ресинка кластера, сек (не влияет на лимит удалений) |
-| `config.filters.namespaceExcludeRegex` | `^kube-system$` | защита kube-system |
-| `podDisruptionBudget.enabled` | `true` | PDB при `replicaCount > 1` |
-| `config.watchNamespaces` | `[]` | список namespace (пусто = весь кластер) |
-| `rbac.scope` | `cluster` | `cluster` или `namespaced` |
-| `replicaCount` + `leaderElection.enabled` | `1` / `false` | HA |
-| `metrics.serviceMonitor.enabled` | `false` | ServiceMonitor для Prometheus Operator |
+| Value                                     | По умолчанию    | Назначение                                                        |
+| ----------------------------------------- | --------------- | ----------------------------------------------------------------- |
+| `config.dryRun`                           | `true`          | только логировать (безопасный режим)                              |
+| `config.extraGraceSeconds`                | `60`            | буфер сверх grace-периода пода перед force-delete                 |
+| `config.maxDeletionsPerInterval`          | `200`           | макс. удалений за окно `rateLimitWindowSeconds` (0 = без лимита)  |
+| `config.rateLimitWindowSeconds`           | `30`            | окно лимита удалений, сек                                         |
+| `config.maxConcurrentReconciles`          | `4`             | параллельные reconcile-воркеры                                    |
+| `config.syncPeriodSeconds`                | `600`           | период опроса/ресинка кластера, сек (не влияет на лимит удалений) |
+| `config.filters.namespaceExcludeRegex`    | `^kube-system$` | защита kube-system                                                |
+| `podDisruptionBudget.enabled`             | `true`          | PDB при `replicaCount > 1`                                        |
+| `config.watchNamespaces`                  | `[]`            | список namespace (пусто = весь кластер)                           |
+| `rbac.scope`                              | `cluster`       | `cluster` или `namespaced`                                        |
+| `replicaCount` + `leaderElection.enabled` | `1` / `false`   | HA                                                                |
+| `metrics.serviceMonitor.enabled`          | `false`         | ServiceMonitor для Prometheus Operator                            |
 
 Ограничение namespace (наименьшие привилегии — Role в каждом ns):
 
@@ -150,10 +150,10 @@ helm install terminating-pod-reaper charts/terminating-pod-reaper -n terminating
 
 ```yaml
 # values-ha.yaml
-replicaCount: 3            # >1 → leader election включается автоматически
+replicaCount: 3 # >1 → leader election включается автоматически
 
 config:
-  dryRun: false            # реальное удаление (сначала обкатайте с dryRun: true)
+  dryRun: false # реальное удаление (сначала обкатайте с dryRun: true)
   # kube-system исключён по умолчанию; ownerKinds по умолчанию ReplicaSet,Job
 
 # Разносим реплики оператора по зонам доступности
@@ -180,11 +180,11 @@ tolerations:
 
 resources:
   requests: { cpu: 50m, memory: 64Mi }
-  limits:   { cpu: 200m, memory: 128Mi }
+  limits: { cpu: 200m, memory: 128Mi }
 
 metrics:
   serviceMonitor:
-    enabled: true          # если стоит Prometheus Operator
+    enabled: true # если стоит Prometheus Operator
 ```
 
 ```bash
@@ -220,16 +220,16 @@ namespace, чарт дополнительно выдаёт read-only `ClusterRo
 
 Три уровня, от быстрого к реалистичному:
 
-| Уровень | Что проверяет | Где | Как запустить |
-|---|---|---|---|
-| Unit | логика фильтров (namespace/label/owner) | job `ci → go` | `go test ./...` |
-| Интеграционные (envtest) | reconcile против настоящего kube-apiserver: тайминг, owner-фильтр, ветка finalizer | job `ci → envtest` | `KUBEBUILDER_ASSETS=$(setup-envtest use -p path) go test -tags=integration ./...` |
-| E2E (kind) | полный путь: «смерть» ноды → добивание пода Deployment, StatefulSet не тронут | workflow `e2e` (kind) | `bash test/e2e/run.sh` |
+| Уровень                  | Что проверяет                                                                      | Где                   | Как запустить                                                                     |
+| ------------------------ | ---------------------------------------------------------------------------------- | --------------------- | --------------------------------------------------------------------------------- |
+| Unit                     | логика фильтров (namespace/label/owner)                                            | job `ci → go`         | `go test ./...`                                                                   |
+| Интеграционные (envtest) | reconcile против настоящего kube-apiserver: тайминг, owner-фильтр, ветка finalizer | job `ci → envtest`    | `KUBEBUILDER_ASSETS=$(setup-envtest use -p path) go test -tags=integration ./...` |
+| E2E (kind)               | полный путь: «смерть» ноды → добивание пода Deployment, StatefulSet не тронут      | workflow `e2e` (kind) | `bash test/e2e/run.sh`                                                            |
 
 Реальный отказ зоны в Yandex Cloud (SecurityGroup, блокирующая трафик группе нод) в CI не
 воспроизводится — это chaos-тест для staging (можно отдельным `workflow_dispatch`-пайплайном
-против живого кластера). В CI имитируется *симптом* (поды в `Terminating` с нужными owner’ами),
-а не *причина* (сетевой разрыв).
+против живого кластера). В CI имитируется _симптом_ (поды в `Terminating` с нужными owner’ами),
+а не _причина_ (сетевой разрыв).
 
 ## ⚠️ Важно
 
@@ -241,3 +241,7 @@ Force-delete убирает запись пода из etcd, но **не гар�
 ## Лицензия
 
 [MIT](LICENSE) — open source.
+
+## Стандарт разработки
+
+Репозиторий подключает общий стандарт версии 0.4.0. См. [русское руководство](docs/ru/development-standard.md) и [English guide](docs/en/development-standard.md). Локальный пакет проверяет секреты подготовленного коммита, форматирование изменённых файлов и двуязычную документацию до merge. Проверки продукта сохраняются. Подключение продолжается; приёмка продукта и перевод прежней документации учитываются отдельно в .repo-policy.json.
